@@ -1631,74 +1631,107 @@ function doSearch(q) {
   });
 }
 
-// ── COMMUNITY VOTE ────────────────────────────────────────
+// ── COMMUNITY VOTE (Supabase backend) ─────────────────────
 (async function initVote() {
-  const VOTE_KEY    = 'nexgrid-votes-v1';   // shared: { solar, kinetic }
-  const HISTORY_KEY = 'nexgrid-history-v1'; // personal: array of session IDs voted
 
-  // Unique session ID — new every page load
-  const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  // ── SUPABASE CONFIG ──────────────────────────────────────
+  // 1. Go to https://supabase.com and create a free project
+  // 2. In the SQL editor run:
+  //      CREATE TABLE votes (id TEXT PRIMARY KEY, solar INT DEFAULT 0, kinetic INT DEFAULT 0);
+  //      INSERT INTO votes (id, solar, kinetic) VALUES ('nexgrid', 0, 0);
+  // 3. Paste your project URL and anon key below:
+  const SUPABASE_URL  = 'https://tvecyfoxtqtqnkbgndnp.supabase.co';   // e.g. https://xxxx.supabase.co
+  const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR2ZWN5Zm94dHF0cW5rYmduZG5wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTI2NTMsImV4cCI6MjA5NTg2ODY1M30.DYXhf_S51xS-_ctA2uoVaVIE_AJK1gGsjfN-ojpg2Bc';
+  const TABLE         = 'votes';
+  const ROW_ID        = 'nexgrid';
 
-  // This session's vote (in-memory only, resets each visit)
+  const HEADERS = {
+    'apikey':        SUPABASE_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_KEY,
+    'Content-Type':  'application/json',
+    'Prefer':        'return=representation',
+  };
+
+  // Session vote lives in memory — fresh each page load
   let sessionVote = null;
 
-  // ── storage helpers ──
+  // ── API helpers ──────────────────────────────────────────
   async function loadVotes() {
     try {
-      const r = await window.storage.get(VOTE_KEY, true);
-      return r ? JSON.parse(r.value) : { solar: 0, kinetic: 0 };
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/${TABLE}?id=eq.${ROW_ID}&select=solar,kinetic`,
+        { headers: HEADERS }
+      );
+      const data = await r.json();
+      return data[0] || { solar: 0, kinetic: 0 };
     } catch { return { solar: 0, kinetic: 0 }; }
   }
 
-  async function saveVotes(v) {
-    try { await window.storage.set(VOTE_KEY, JSON.stringify(v), true); } catch {}
+  async function incrementVote(add, remove) {
+    // Build patch — increment chosen side, decrement old side if switching
+    const patch = {};
+    if (add)    patch[add]    = `${add}+1`;   // Supabase raw increment via RPC not needed — use read-modify-write
+    try {
+      // Read current, modify, write back
+      const current = await loadVotes();
+      if (remove) current[remove] = Math.max(0, current[remove] - 1);
+      if (add)    current[add]++;
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/${TABLE}?id=eq.${ROW_ID}`,
+        { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ solar: current.solar, kinetic: current.kinetic }) }
+      );
+      return current;
+    } catch { return loadVotes(); }
   }
 
-  // ── animate number counter ──
-  function animateCount(el, from, to, duration) {
+  async function decrementVote(side) {
+    try {
+      const current = await loadVotes();
+      current[side] = Math.max(0, current[side] - 1);
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/${TABLE}?id=eq.${ROW_ID}`,
+        { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ solar: current.solar, kinetic: current.kinetic }) }
+      );
+      return current;
+    } catch { return loadVotes(); }
+  }
+
+  // ── animate counter ──────────────────────────────────────
+  let lastTotal = 0;
+  function animateCount(el, from, to, dur) {
     const start = performance.now();
     function step(now) {
-      const t = Math.min((now - start) / duration, 1);
+      const t = Math.min((now - start) / dur, 1);
       el.textContent = Math.round(from + (to - from) * t);
       if (t < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   }
 
-  let lastTotal = 0;
-
-  // ── render ──
+  // ── render ───────────────────────────────────────────────
   function renderVotes(votes) {
     const total = votes.solar + votes.kinetic;
     const sp = total ? Math.round(votes.solar   / total * 100) : 50;
     const kp = total ? Math.round(votes.kinetic / total * 100) : 50;
 
-    // Percentages — show 50/50 until there are votes
     document.getElementById('solarPct').textContent   = sp + '%';
     document.getElementById('kineticPct').textContent = kp + '%';
     document.getElementById('solarBar').style.width   = sp + '%';
     document.getElementById('kineticBar').style.width = kp + '%';
-
-    // Per-side counts
     document.getElementById('solarCount').textContent   = total ? votes.solar   + ' vote' + (votes.solar   !== 1 ? 's' : '') : '';
     document.getElementById('kineticCount').textContent = total ? votes.kinetic + ' vote' + (votes.kinetic !== 1 ? 's' : '') : '';
 
-    // Big total counter — animate when it changes
     const bigEl = document.getElementById('voteTotalBig');
     animateCount(bigEl, lastTotal, total, 600);
     lastTotal = total;
 
-    // Sub line
     document.getElementById('voteTotalLine').textContent =
       total === 0 ? 'Be the first to vote'
       : total === 1 ? '1 person has voted'
       : total + ' people have voted';
 
-    // Voted state for this session
-    const sCard = document.getElementById('voteSolar');
-    const kCard = document.getElementById('voteKinetic');
-    sCard.classList.toggle('voted-solar',   sessionVote === 'solar');
-    kCard.classList.toggle('voted-kinetic', sessionVote === 'kinetic');
+    document.getElementById('voteSolar').classList.toggle('voted-solar',   sessionVote === 'solar');
+    document.getElementById('voteKinetic').classList.toggle('voted-kinetic', sessionVote === 'kinetic');
 
     const vv = document.getElementById('voteVoted');
     const vl = document.getElementById('voteVotedLabel');
@@ -1710,43 +1743,35 @@ function doSearch(q) {
     }
   }
 
-  // ── initial load ──
+  // ── init ─────────────────────────────────────────────────
   let votes = await loadVotes();
   renderVotes(votes);
 
-  // ── poll every 6s ──
+  // Live poll every 6s
   setInterval(async () => {
     votes = await loadVotes();
     renderVotes(votes);
   }, 6000);
 
-  // ── cast vote (once per session) ──
+  // ── cast vote ────────────────────────────────────────────
   window.castVote = async function(choice) {
-    if (sessionVote === choice) return; // already voted this in this session
-    votes = await loadVotes();
-
-    // Remove previous session vote if switching
-    if (sessionVote) {
-      votes[sessionVote] = Math.max(0, votes[sessionVote] - 1);
-    }
-
-    votes[choice]++;
+    if (sessionVote === choice) return;
+    const prev = sessionVote;
     sessionVote = choice;
-
-    await saveVotes(votes);
+    votes = await incrementVote(choice, prev);
     renderVotes(votes);
   };
 
-  // ── change vote (within same session) ──
+  // ── change vote ──────────────────────────────────────────
   window.changeVote = async function() {
     if (!sessionVote) return;
-    votes = await loadVotes();
-    votes[sessionVote] = Math.max(0, votes[sessionVote] - 1);
+    const prev = sessionVote;
     sessionVote = null;
-    await saveVotes(votes);
+    votes = await decrementVote(prev);
     renderVotes(votes);
   };
 })();
+
 
 
 
