@@ -1,0 +1,1889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NexGrid — Solar Kinetic Paving</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ── TOKENS ─────────────────────────────────────────────── */
+:root {
+  --sun:       #F5A623;
+  --electric:  #00E5FF;
+  --deep:      #0A0E1A;
+  --mid:       #111827;
+  --surface:   #1A2235;
+  --muted:     #3A4560;
+  --text:      #E8EDF5;
+  --text-dim:  #8899BB;
+  --grid-line: rgba(0,229,255,0.07);
+  --tile-glow: rgba(245,166,35,0.15);
+  --danger:    #FF4560;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--deep);
+  color: var(--text);
+  overflow-x: hidden;
+  cursor: none;
+  min-height: 100vh;
+}
+
+/* ── CURSOR ─────────────────────────────────────────────── */
+.cursor {
+  position: fixed; width: 12px; height: 12px;
+  background: var(--electric); border-radius: 50%;
+  pointer-events: none; z-index: 9999;
+  transform: translate(-50%,-50%);
+  transition: width .2s, height .2s, background .2s;
+  mix-blend-mode: screen;
+}
+.cursor-ring {
+  position: fixed; width: 36px; height: 36px;
+  border: 1px solid rgba(0,229,255,.5); border-radius: 50%;
+  pointer-events: none; z-index: 9998;
+  transform: translate(-50%,-50%);
+  transition: transform .18s ease, width .2s, height .2s;
+}
+body:has(a:hover) .cursor,
+body:has(button:hover) .cursor   { width:20px; height:20px; background:var(--sun); }
+body:has(a:hover) .cursor-ring,
+body:has(button:hover) .cursor-ring { width:56px; height:56px; border-color:rgba(245,166,35,.4); }
+
+/* ── FIXED CHROME ───────────────────────────────────────── */
+.grid-bg {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+.scanlines {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.03) 2px,rgba(0,0,0,.03) 4px);
+  opacity: 0; transition: opacity .5s;
+}
+body.portal .scanlines { opacity: 1; }
+
+/* ── NAV ────────────────────────────────────────────────── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 4rem;
+  transition: background .4s, border-color .4s, backdrop-filter .4s;
+}
+nav.home-nav {
+  background: linear-gradient(to bottom, rgba(10,14,26,.97), transparent);
+  backdrop-filter: blur(2px);
+  border-bottom: 1px solid transparent;
+}
+nav.portal-nav {
+  background: rgba(10,14,26,.97);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--muted);
+}
+
+/* LOGO MARK + WORDMARK */
+.logo {
+  display: flex; align-items: center; gap: .7rem;
+  text-decoration: none; cursor: none;
+}
+.logo-mark {
+  width: 36px; height: 36px; flex-shrink: 0;
+}
+.logo-wordmark {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.8rem; letter-spacing: .08em;
+  color: var(--text); line-height: 1;
+}
+.logo-wordmark span { color: var(--electric); }
+
+.nav-links {
+  display: flex; gap: 2.5rem; list-style: none;
+  transition: opacity .3s;
+}
+.nav-links a {
+  font-family: 'Space Mono', monospace;
+  font-size: .72rem; letter-spacing: .15em;
+  text-transform: uppercase; color: var(--text-dim);
+  text-decoration: none; transition: color .2s;
+}
+.nav-links a:hover { color: var(--electric); }
+
+.nav-right { display: flex; align-items: center; gap: 1rem; }
+
+.nav-cta {
+  font-family: 'Space Mono', monospace;
+  font-size: .72rem; letter-spacing: .1em; text-transform: uppercase;
+  background: transparent; border: 1px solid var(--electric);
+  color: var(--electric); padding: .55rem 1.4rem;
+  cursor: none; transition: background .2s, color .2s;
+}
+.nav-cta:hover { background: var(--electric); color: var(--deep); }
+
+.nav-badge {
+  font-family: 'Space Mono', monospace;
+  font-size: .65rem; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--danger); border: 1px solid var(--danger);
+  padding: .35rem .9rem;
+  animation: blink 2s step-end infinite;
+  display: none;
+}
+body.portal .nav-badge { display: inline-block; }
+body.portal .nav-links { opacity: 0; pointer-events: none; }
+body.portal .nav-cta { display: none; }
+
+.back-link {
+  font-family: 'Space Mono', monospace;
+  font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--text-dim); text-decoration: none;
+  display: none; align-items: center; gap: .5rem;
+  transition: color .2s; cursor: none;
+}
+.back-link::before { content: '←'; }
+.back-link:hover { color: var(--electric); }
+body.portal .back-link { display: flex; }
+
+/* HAMBURGER BUTTON */
+.hamburger {
+  display: flex; flex-direction: column; justify-content: center;
+  gap: 5px; width: 36px; height: 36px;
+  background: transparent; border: 1px solid var(--muted);
+  padding: 8px 7px; cursor: none;
+  transition: border-color .2s;
+  flex-shrink: 0;
+}
+.hamburger:hover { border-color: var(--electric); }
+.hamburger span {
+  display: block; height: 1.5px; background: var(--text);
+  transition: transform .25s, opacity .25s, background .2s;
+  transform-origin: center;
+}
+.hamburger.open span:nth-child(1) { transform: translateY(6.5px) rotate(45deg); background: var(--electric); }
+.hamburger.open span:nth-child(2) { opacity: 0; }
+.hamburger.open span:nth-child(3) { transform: translateY(-6.5px) rotate(-45deg); background: var(--electric); }
+
+/* SEARCH BUTTON */
+.search-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  background: transparent; border: 1px solid var(--muted);
+  cursor: none; transition: border-color .2s;
+  flex-shrink: 0;
+}
+.search-btn:hover { border-color: var(--electric); }
+.search-btn svg { width: 16px; height: 16px; stroke: var(--text); stroke-width: 2; fill: none; }
+
+/* SEARCH OVERLAY */
+.search-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(10,14,26,.97);
+  backdrop-filter: blur(16px);
+  display: flex; flex-direction: column;
+  align-items: center; padding-top: 18vh;
+  opacity: 0; pointer-events: none;
+  transition: opacity .25s ease;
+}
+.search-overlay.open { opacity: 1; pointer-events: all; }
+
+.search-close {
+  position: absolute; top: 1.4rem; right: 2rem;
+  background: transparent; border: none; cursor: none;
+  font-family: 'Space Mono', monospace; font-size: .72rem;
+  letter-spacing: .15em; color: var(--text-dim); text-transform: uppercase;
+  display: flex; align-items: center; gap: .5rem;
+  transition: color .2s;
+}
+.search-close:hover { color: var(--electric); }
+
+.search-input-wrap {
+  position: relative; width: min(640px, 90vw);
+  border-bottom: 2px solid var(--electric);
+  display: flex; align-items: center; gap: 1rem;
+  padding-bottom: .6rem; margin-bottom: 2rem;
+}
+.search-input-wrap svg { width: 20px; height: 20px; stroke: var(--electric); stroke-width: 2; fill: none; flex-shrink: 0; }
+
+#searchInput {
+  flex: 1; background: transparent; border: none;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  letter-spacing: .06em; color: var(--text);
+  outline: none; cursor: none;
+}
+#searchInput::placeholder { color: var(--muted); }
+
+.search-results {
+  width: min(640px, 90vw);
+  display: flex; flex-direction: column; gap: .4rem;
+  max-height: 50vh; overflow-y: auto;
+}
+.search-result {
+  padding: 1rem 1.2rem;
+  background: var(--surface); border: 1px solid var(--muted);
+  cursor: none; transition: border-color .2s, background .2s;
+}
+.search-result:hover { border-color: var(--electric); background: var(--mid); }
+.sr-section {
+  font-family: 'Space Mono', monospace; font-size: .58rem;
+  letter-spacing: .15em; text-transform: uppercase;
+  color: var(--electric); margin-bottom: .3rem;
+}
+.sr-title {
+  font-family: 'DM Sans', sans-serif; font-size: .95rem;
+  font-weight: 400; color: var(--text); line-height: 1.4;
+}
+.sr-title em { color: var(--sun); font-style: normal; font-weight: 700; }
+.search-empty {
+  font-family: 'Space Mono', monospace; font-size: .72rem;
+  letter-spacing: .1em; color: var(--text-dim); text-align: center;
+  padding: 2rem 0; display: none;
+}
+
+.nav-dropdown {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 99;
+  background: rgba(10,14,26,.98);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--muted);
+  padding: 5.5rem 4rem 2rem;
+  transform: translateY(-100%);
+  transition: transform .35s cubic-bezier(.4,0,.2,1);
+  pointer-events: none;
+}
+.nav-dropdown.open {
+  transform: translateY(0);
+  pointer-events: all;
+}
+.dropdown-items {
+  display: flex; flex-direction: column; gap: 0;
+  list-style: none;
+}
+.dropdown-items li {
+  border-bottom: 1px solid var(--muted);
+  opacity: 0; transform: translateY(10px);
+  transition: opacity .25s, transform .25s;
+}
+.nav-dropdown.open .dropdown-items li { opacity: 1; transform: translateY(0); }
+.nav-dropdown.open .dropdown-items li:nth-child(1) { transition-delay: .05s; }
+.nav-dropdown.open .dropdown-items li:nth-child(2) { transition-delay: .10s; }
+.nav-dropdown.open .dropdown-items li:nth-child(3) { transition-delay: .15s; }
+.nav-dropdown.open .dropdown-items li:nth-child(4) { transition-delay: .20s; }
+.nav-dropdown.open .dropdown-items li:nth-child(5) { transition-delay: .25s; }
+.nav-dropdown.open .dropdown-items li:nth-child(6) { transition-delay: .30s; }
+
+.dropdown-items a, .dropdown-items button {
+  display: flex; justify-content: space-between; align-items: center;
+  width: 100%; padding: 1.1rem 0;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  letter-spacing: .06em; color: var(--text-dim);
+  text-decoration: none; background: transparent; border: none;
+  cursor: none; transition: color .2s, padding-left .2s;
+  text-align: left;
+}
+.dropdown-items a:hover,
+.dropdown-items button:hover { color: var(--electric); padding-left: .6rem; }
+.dropdown-items a::after,
+.dropdown-items button::after {
+  content: '→';
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1rem; color: inherit; opacity: .5;
+}
+
+
+/* ── PAGE TRANSITION OVERLAY ────────────────────────────── */
+.page-cover {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--deep);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .35s ease;
+}
+.page-cover.active { opacity: 1; pointer-events: all; }
+
+/* ── PAGE VIEWS ─────────────────────────────────────────── */
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── SHARED ANIMATIONS ──────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity:0; transform:translateY(24px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity:0; } to { opacity:1; }
+}
+@keyframes blink {
+  0%,100% { opacity:1; } 50% { opacity:.4; }
+}
+@keyframes pulse-tile {
+  0%,100% { box-shadow:0 0 20px rgba(245,166,35,.2) inset,0 0 10px rgba(245,166,35,.1); }
+  50%      { box-shadow:0 0 35px rgba(245,166,35,.35) inset,0 0 20px rgba(245,166,35,.2); }
+}
+
+.reveal { opacity:0; transform:translateY(30px); transition:opacity .7s ease,transform .7s ease; }
+.reveal.visible { opacity:1; transform:translateY(0); }
+.step  { opacity:0; transform:translateX(-20px); transition:opacity .6s,transform .6s; }
+.step.visible  { opacity:1; transform:translateX(0); }
+
+/* ══════════════════════════════════════════════════════════
+   HOME PAGE
+══════════════════════════════════════════════════════════ */
+
+/* HERO */
+.hero {
+  position: relative; min-height: 100vh;
+  display: flex; align-items: center;
+  padding: 0 4rem; overflow: hidden; z-index: 1;
+}
+#heroCanvas {
+  position: absolute; inset: 0; z-index: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+.hero-content { position:relative; z-index:2; max-width:780px; padding-top:6rem; }
+
+.hero-eyebrow {
+  font-family:'Space Mono',monospace; font-size:.72rem; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--electric); margin-bottom:1.5rem;
+  display:flex; align-items:center; gap:1rem;
+  opacity:0; animation:fadeUp .8s .2s forwards;
+}
+.hero-eyebrow::before { content:''; display:block; width:40px; height:1px; background:var(--electric); }
+
+.hero-title {
+  font-family:'Bebas Neue',sans-serif;
+  font-size:clamp(5rem,10vw,9.5rem); line-height:.92; letter-spacing:.02em;
+  margin-bottom:2rem; opacity:0; animation:fadeUp .8s .4s forwards;
+}
+.hero-title .accent { color:var(--sun); display:block; }
+
+.hero-sub {
+  font-size:1.15rem; font-weight:300; line-height:1.7;
+  color:var(--text-dim); max-width:520px; margin-bottom:3rem;
+  opacity:0; animation:fadeUp .8s .6s forwards;
+}
+.hero-actions {
+  display:flex; gap:1.2rem; align-items:center;
+  opacity:0; animation:fadeUp .8s .8s forwards;
+}
+
+.btn-primary {
+  font-family:'Space Mono',monospace; font-size:.78rem; letter-spacing:.1em;
+  text-transform:uppercase; background:var(--sun); color:var(--deep);
+  border:none; padding:1rem 2.2rem; cursor:none; font-weight:700;
+  transition:transform .15s, box-shadow .15s;
+  text-decoration:none; display:inline-block;
+}
+.btn-primary:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(245,166,35,.35); }
+
+.btn-ghost {
+  font-family:'Space Mono',monospace; font-size:.78rem; letter-spacing:.1em;
+  text-transform:uppercase; background:transparent; color:var(--text);
+  border:none; padding:1rem 0; cursor:none; text-decoration:none;
+  display:inline-flex; align-items:center; gap:.6rem;
+  transition:color .2s, gap .2s;
+}
+.btn-ghost:hover { color:var(--electric); gap:1rem; }
+.btn-ghost::after { content:'→'; font-size:1rem; }
+
+/* TILE GRID */
+.hero-visual {
+  position:absolute; right:-60px; top:50%; transform:translateY(-50%);
+  width:560px; height:560px; z-index:1;
+  opacity:0; animation:fadeIn 1.2s .9s forwards;
+}
+.tile-grid {
+  display:grid; grid-template-columns:repeat(6,1fr); grid-template-rows:repeat(6,1fr);
+  gap:6px; width:100%; height:100%;
+  transform:perspective(800px) rotateY(-18deg) rotateX(8deg);
+}
+.tile {
+  background:var(--surface); border:1px solid rgba(0,229,255,.12);
+  position:relative; overflow:hidden; border-radius:3px; transition:background .4s;
+}
+.tile::after {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(135deg,rgba(0,229,255,.06),transparent 60%);
+}
+.tile.active {
+  background:var(--tile-glow); border-color:rgba(245,166,35,.4);
+  animation:pulse-tile 2s ease-in-out infinite;
+}
+.tile-inner { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+.tile-inner svg { width:40%; height:40%; opacity:.25; }
+.tile.active .tile-inner svg { opacity:.7; }
+
+/* STATS BAR */
+.stats-bar {
+  position:relative; z-index:1;
+  background:var(--surface); border-top:1px solid var(--muted); border-bottom:1px solid var(--muted);
+  padding:2rem 4rem; display:grid; grid-template-columns:repeat(4,1fr);
+}
+.stat-item {
+  padding:0 2.5rem; border-right:1px solid var(--muted);
+  opacity:0; animation:fadeUp .6s forwards;
+}
+.stat-item:first-child { padding-left:0; }
+.stat-item:last-child  { border-right:none; }
+.stat-item:nth-child(1){animation-delay:.1s}
+.stat-item:nth-child(2){animation-delay:.2s}
+.stat-item:nth-child(3){animation-delay:.3s}
+.stat-item:nth-child(4){animation-delay:.4s}
+.stat-num { font-family:'Bebas Neue',sans-serif; font-size:3rem; letter-spacing:.04em; color:var(--sun); line-height:1; }
+.stat-label { font-family:'Space Mono',monospace; font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--text-dim); margin-top:.4rem; }
+
+/* SECTIONS */
+section { position:relative; z-index:1; padding:8rem 4rem; }
+.section-tag {
+  font-family:'Space Mono',monospace; font-size:.68rem; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--electric); margin-bottom:1rem;
+  display:flex; align-items:center; gap:.8rem;
+}
+.section-tag::before { content:''; display:block; width:24px; height:1px; background:var(--electric); }
+.section-title { font-family:'Bebas Neue',sans-serif; font-size:clamp(3rem,5vw,5rem); letter-spacing:.03em; line-height:1; margin-bottom:1.5rem; }
+
+/* HOW IT WORKS */
+.how-grid { display:grid; grid-template-columns:1fr 1fr; gap:5rem; align-items:center; margin-top:4rem; }
+.steps { display:flex; flex-direction:column; gap:2.5rem; }
+.step-num { font-family:'Bebas Neue',sans-serif; font-size:3.5rem; color:var(--muted); line-height:1; flex-shrink:0; width:2.5rem; }
+.step { display:flex; gap:2rem; align-items:flex-start; }
+.step-body h3 { font-weight:500; font-size:1.1rem; margin-bottom:.5rem; }
+.step-body p  { font-size:.95rem; font-weight:300; line-height:1.7; color:var(--text-dim); }
+
+.tile-diagram { background:var(--surface); border:1px solid var(--muted); border-radius:6px; padding:2.5rem; }
+.layer { display:flex; align-items:center; gap:1.5rem; padding:1rem 0; border-bottom:1px solid var(--grid-line); }
+.layer:last-of-type { border-bottom:none; }
+.layer-bar { width:120px; height:28px; border-radius:2px; flex-shrink:0; }
+.layer-bar.solar   { background:linear-gradient(90deg,rgba(245,166,35,.6),rgba(245,166,35,.3)); border:1px solid rgba(245,166,35,.5); }
+.layer-bar.kinetic { background:linear-gradient(90deg,rgba(0,229,255,.4),rgba(0,229,255,.15)); border:1px solid rgba(0,229,255,.4); }
+.layer-bar.convert { background:linear-gradient(90deg,rgba(100,180,255,.3),rgba(100,180,255,.1)); border:1px solid rgba(100,180,255,.3); }
+.layer-bar.struct  { background:linear-gradient(90deg,rgba(255,255,255,.12),rgba(255,255,255,.04)); border:1px solid rgba(255,255,255,.15); }
+.layer-bar.heat    { background:linear-gradient(90deg,rgba(255,80,20,.55),rgba(255,160,40,.2)); border:1px solid rgba(255,100,30,.5); }
+.layer-bar.grid    { background:linear-gradient(90deg,rgba(0,229,255,.2),rgba(0,229,255,.05)); border:1px solid rgba(0,229,255,.2); }
+.layer-info .name { font-family:'Space Mono',monospace; font-size:.72rem; text-transform:uppercase; letter-spacing:.1em; margin-bottom:.2rem; }
+.layer-info .desc { font-size:.8rem; color:var(--text-dim); font-weight:300; }
+.diagram-stats { margin-top:2rem; display:flex; gap:2rem; }
+.ds-val { font-family:'Bebas Neue',sans-serif; font-size:2.2rem; line-height:1; }
+.ds-lbl { font-family:'Space Mono',monospace; font-size:.6rem; color:var(--text-dim); letter-spacing:.1em; text-transform:uppercase; }
+
+/* PRODUCTS */
+.products-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1.5px; margin-top:4rem; background:var(--muted); border:1px solid var(--muted); }
+.product-card { background:var(--mid); padding:3rem 2.5rem; position:relative; overflow:hidden; transition:background .3s; }
+.product-card:hover { background:var(--surface); }
+.product-card:hover .product-icon { transform:scale(1.1); }
+.product-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--electric); transform:scaleX(0); transform-origin:left; transition:transform .4s ease; }
+.product-card:hover::before { transform:scaleX(1); }
+.product-icon { width:56px; height:56px; margin-bottom:1.8rem; transition:transform .3s; }
+.product-name { font-family:'Bebas Neue',sans-serif; font-size:1.8rem; letter-spacing:.05em; margin-bottom:.5rem; }
+.product-model { font-family:'Space Mono',monospace; font-size:.65rem; letter-spacing:.15em; color:var(--electric); text-transform:uppercase; margin-bottom:1.2rem; }
+.product-desc { font-size:.9rem; font-weight:300; line-height:1.7; color:var(--text-dim); margin-bottom:2rem; }
+.product-specs { display:flex; flex-direction:column; gap:.6rem; }
+.spec-row { display:flex; justify-content:space-between; font-family:'Space Mono',monospace; font-size:.68rem; border-bottom:1px solid var(--grid-line); padding-bottom:.6rem; }
+.spec-row .sk { color:var(--text-dim); letter-spacing:.08em; }
+.spec-row .sv { color:var(--sun); letter-spacing:.05em; }
+.popular-badge { position:absolute; top:1.2rem; right:1.5rem; font-family:'Space Mono',monospace; font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; color:var(--deep); background:var(--sun); padding:.3rem .7rem; }
+
+/* VB SECTION */
+.vb-section { background:var(--surface); border-top:1px solid var(--muted); border-bottom:1px solid var(--muted); }
+.vb-grid { display:grid; grid-template-columns:1fr 1fr; gap:6rem; align-items:center; }
+.vb-map { background:var(--mid); border:1px solid var(--muted); border-radius:4px; overflow:hidden; height:420px; }
+.vb-map svg { width:100%; height:100%; }
+.vb-text p { font-size:1rem; font-weight:300; line-height:1.8; color:var(--text-dim); margin-bottom:1.5rem; }
+.badge-row { display:flex; gap:1rem; flex-wrap:wrap; margin-top:2rem; }
+.badge { font-family:'Space Mono',monospace; font-size:.65rem; letter-spacing:.12em; text-transform:uppercase; padding:.5rem 1rem; border:1px solid var(--muted); color:var(--text-dim); border-radius:2px; }
+.badge.highlight { border-color:var(--sun); color:var(--sun); }
+
+/* TESTIMONIAL */
+.testimonial-section { text-align:center; background:var(--deep); }
+.quote {
+  font-size:clamp(1.4rem,2.5vw,2rem); font-weight:300; font-style:italic;
+  line-height:1.5; color:var(--text); max-width:800px; margin:0 auto 2rem;
+  position:relative;
+}
+.quote::before {
+  content:'"'; font-family:'Bebas Neue',sans-serif; font-size:8rem;
+  color:var(--muted); position:absolute; top:-3rem; left:-3rem; line-height:1;
+}
+.quote-attr { font-family:'Space Mono',monospace; font-size:.72rem; letter-spacing:.15em; text-transform:uppercase; color:var(--electric); }
+
+/* CONTACT */
+.cta-section {
+  background:linear-gradient(135deg,var(--surface) 0%,var(--mid) 100%);
+  border-top:1px solid var(--muted);
+  display:grid; grid-template-columns:1fr 1fr; gap:6rem;
+  align-items:start; padding:8rem 4rem; position:relative; z-index:1;
+}
+.contact-form { display:flex; flex-direction:column; gap:1.2rem; margin-top:2rem; }
+.form-row { display:flex; gap:1rem; }
+.form-field { display:flex; flex-direction:column; gap:.5rem; flex:1; }
+label { font-family:'Space Mono',monospace; font-size:.65rem; letter-spacing:.15em; text-transform:uppercase; color:var(--text-dim); }
+input, textarea, select {
+  background:var(--deep); border:1px solid var(--muted); color:var(--text);
+  padding:.9rem 1rem; font-family:'DM Sans',sans-serif; font-size:.95rem; font-weight:300;
+  outline:none; transition:border-color .2s; border-radius:0; -webkit-appearance:none;
+  cursor:none; width:100%;
+}
+input:focus, textarea:focus, select:focus { border-color:var(--electric); }
+textarea { min-height:120px; resize:vertical; }
+select option { background:var(--deep); }
+.submit-btn {
+  font-family:'Space Mono',monospace; font-size:.78rem; letter-spacing:.1em; text-transform:uppercase;
+  background:var(--electric); color:var(--deep); border:none; padding:1.1rem 2.5rem;
+  cursor:none; font-weight:700; align-self:flex-start; transition:transform .15s, box-shadow .15s, background .3s, color .3s;
+}
+.submit-btn:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(0,229,255,.3); }
+.submit-btn.sent { background:#00C060; color:#fff; cursor:default; transform:none; box-shadow:0 0 24px rgba(0,192,96,.4); pointer-events:none; }
+.info-items { display:flex; flex-direction:column; gap:1.4rem; }
+.info-item { display:flex; gap:1.2rem; align-items:flex-start; }
+.info-icon { width:36px; height:36px; background:var(--surface); border:1px solid var(--muted); border-radius:2px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:.9rem; }
+.info-text .it-label { font-family:'Space Mono',monospace; font-size:.62rem; letter-spacing:.15em; text-transform:uppercase; color:var(--text-dim); margin-bottom:.2rem; }
+.info-text .it-val   { font-size:.92rem; font-weight:300; }
+
+/* ══════════════════════════════════════════════════════════
+   PORTAL PAGE
+══════════════════════════════════════════════════════════ */
+
+.portal-hero {
+  position:relative; z-index:2; padding:12rem 4rem 5rem;
+  border-bottom:1px solid var(--muted);
+  background:linear-gradient(to bottom, rgba(0,229,255,.03), transparent);
+}
+.access-tag {
+  font-family:'Space Mono',monospace; font-size:.68rem; letter-spacing:.25em;
+  text-transform:uppercase; color:var(--danger); margin-bottom:1.2rem;
+  display:flex; align-items:center; gap:.8rem;
+}
+.access-tag::before { content:''; display:block; width:8px; height:8px; border-radius:50%; background:var(--danger); animation:blink 1s step-end infinite; }
+.portal-title { font-family:'Bebas Neue',sans-serif; font-size:clamp(3.5rem,7vw,7rem); line-height:.92; letter-spacing:.03em; margin-bottom:1.5rem; }
+.portal-title .dim { color:var(--text-dim); }
+.portal-sub { font-size:1rem; font-weight:300; line-height:1.7; color:var(--text-dim); max-width:540px; }
+
+.portal-body {
+  position:relative; z-index:2; padding:4rem;
+  display:grid; grid-template-columns:1fr 1fr;
+  gap:1.5px; background:var(--muted); border-bottom:1px solid var(--muted);
+}
+.portal-card { background:var(--mid); padding:2.5rem; position:relative; overflow:hidden; transition:background .25s; }
+.portal-card:hover { background:var(--surface); }
+.portal-card::after { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:var(--electric); transform:scaleX(0); transform-origin:left; transition:transform .35s; }
+.portal-card:hover::after { transform:scaleX(1); }
+.portal-card.locked { opacity:.5; pointer-events:none; }
+.portal-card.locked::before { content:'🔒 CLEARANCE REQUIRED'; position:absolute; top:1rem; right:1rem; font-family:'Space Mono',monospace; font-size:.55rem; letter-spacing:.1em; color:var(--danger); border:1px solid var(--danger); padding:.2rem .5rem; }
+.card-icon { font-size:2rem; margin-bottom:1.2rem; display:block; }
+.card-tag  { font-family:'Space Mono',monospace; font-size:.62rem; letter-spacing:.18em; text-transform:uppercase; color:var(--electric); margin-bottom:.6rem; }
+.card-title{ font-family:'Bebas Neue',sans-serif; font-size:1.8rem; letter-spacing:.04em; margin-bottom:.8rem; }
+.card-desc { font-size:.88rem; font-weight:300; line-height:1.7; color:var(--text-dim); margin-bottom:2rem; }
+.card-btn  { font-family:'Space Mono',monospace; font-size:.7rem; letter-spacing:.1em; text-transform:uppercase; background:transparent; border:1px solid var(--electric); color:var(--electric); padding:.65rem 1.4rem; cursor:none; text-decoration:none; display:inline-block; transition:background .2s, color .2s; }
+.card-btn:hover { background:var(--electric); color:var(--deep); }
+.card-btn.sun { border-color:var(--sun); color:var(--sun); }
+.card-btn.sun:hover { background:var(--sun); color:var(--deep); }
+
+/* QUOTE FORM PANEL */
+.form-panel {
+  position:relative; z-index:2;
+  background:var(--surface); border-bottom:1px solid var(--muted);
+  padding:5rem 4rem;
+  display:grid; grid-template-columns:1fr 2fr; gap:6rem; align-items:start;
+}
+.form-intro .fi-tag { font-family:'Space Mono',monospace; font-size:.65rem; letter-spacing:.2em; text-transform:uppercase; color:var(--electric); margin-bottom:1rem; display:flex; align-items:center; gap:.7rem; }
+.form-intro .fi-tag::before { content:''; display:block; width:20px; height:1px; background:var(--electric); }
+.form-intro h2 { font-family:'Bebas Neue',sans-serif; font-size:3.5rem; letter-spacing:.04em; line-height:.95; margin-bottom:1.5rem; }
+.form-intro p  { font-size:.9rem; font-weight:300; line-height:1.8; color:var(--text-dim); margin-bottom:1.5rem; }
+.sla-badge { font-family:'Space Mono',monospace; font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; padding:.5rem 1rem; border:1px solid var(--sun); color:var(--sun); display:inline-block; }
+
+.quote-form { display:flex; flex-direction:column; gap:1.2rem; }
+.tile-selector { display:grid; grid-template-columns:repeat(3,1fr); gap:.8rem; margin-top:.3rem; }
+.tile-opt { border:1px solid var(--muted); padding:1rem; cursor:none; transition:border-color .2s, background .2s; text-align:center; user-select:none; }
+.tile-opt:hover    { border-color:var(--electric); background:rgba(0,229,255,.04); }
+.tile-opt.selected { border-color:var(--sun);      background:rgba(245,166,35,.07); }
+.tile-opt .to-name { font-family:'Bebas Neue',sans-serif; font-size:1.3rem; letter-spacing:.06em; display:block; }
+.tile-opt .to-size { font-family:'Space Mono',monospace; font-size:.58rem; color:var(--text-dim); letter-spacing:.1em; }
+.p-submit-btn { font-family:'Space Mono',monospace; font-size:.78rem; letter-spacing:.1em; text-transform:uppercase; background:var(--sun); color:var(--deep); border:none; padding:1.1rem 2.5rem; cursor:none; font-weight:700; align-self:flex-start; transition:transform .15s, box-shadow .15s; }
+.p-submit-btn:hover { transform:translateY(-2px); box-shadow:0 8px 30px rgba(245,166,35,.35); }
+
+.success-state { display:none; text-align:center; padding:4rem 2rem; animation:fadeUp .6s forwards; }
+.success-state.show { display:block; }
+.success-icon { font-size:3rem; margin-bottom:1.5rem; display:block; }
+.success-state h3 { font-family:'Bebas Neue',sans-serif; font-size:2.5rem; color:var(--electric); margin-bottom:.8rem; }
+.success-state p { font-size:.9rem; font-weight:300; color:var(--text-dim); line-height:1.7; }
+
+/* DASHBOARD */
+.status-panel { position:relative; z-index:2; padding:5rem 4rem; border-bottom:1px solid var(--muted); }
+.status-header { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:2.5rem; }
+.status-header h2 { font-family:'Bebas Neue',sans-serif; font-size:2.5rem; letter-spacing:.04em; }
+.live-dot { display:flex; align-items:center; gap:.5rem; font-family:'Space Mono',monospace; font-size:.62rem; letter-spacing:.12em; text-transform:uppercase; color:#00FF88; }
+.live-dot::before { content:''; display:block; width:7px; height:7px; border-radius:50%; background:#00FF88; animation:blink 1.2s step-end infinite; }
+.metrics-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--muted); border:1px solid var(--muted); margin-bottom:3rem; }
+.metric { background:var(--mid); padding:2rem 1.5rem; }
+.metric-val { font-family:'Bebas Neue',sans-serif; font-size:2.8rem; letter-spacing:.04em; line-height:1; }
+.metric-val.cyan  { color:var(--electric); }
+.metric-val.gold  { color:var(--sun); }
+.metric-val.green { color:#00FF88; }
+.metric-val.white { color:var(--text); }
+.metric-label { font-family:'Space Mono',monospace; font-size:.62rem; letter-spacing:.12em; text-transform:uppercase; color:var(--text-dim); margin-top:.5rem; }
+.metric-delta { font-family:'Space Mono',monospace; font-size:.6rem; color:#00FF88; margin-top:.3rem; }
+.chart-row { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+.chart-card { background:var(--mid); border:1px solid var(--muted); padding:1.5rem; }
+.chart-label { font-family:'Space Mono',monospace; font-size:.62rem; letter-spacing:.12em; text-transform:uppercase; color:var(--text-dim); margin-bottom:1rem; }
+
+/* PRODUCT COST LINE */
+.product-cost {
+  display: flex; justify-content: space-between; align-items: center;
+  border: 1px solid rgba(245,166,35,.3);
+  background: rgba(245,166,35,.05);
+  padding: .6rem 1rem; margin-bottom: 1.8rem;
+  border-radius: 2px;
+}
+.cost-label {
+  font-family: 'Space Mono', monospace; font-size: .62rem;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim);
+}
+.cost-value {
+  font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem;
+  letter-spacing: .06em; color: var(--sun);
+}
+
+/* BENEFITS SECTION */
+.benefits-section {
+  background: var(--deep);
+  border-top: 1px solid var(--muted);
+  padding: 8rem 4rem;
+  position: relative; z-index: 1;
+}
+.benefits-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 3rem; margin-top: 4rem;
+}
+.benefits-col {
+  background: var(--surface);
+  border: 1px solid var(--muted);
+  padding: 2.5rem;
+  position: relative;
+}
+.benefits-col-header {
+  display: flex; gap: 1.2rem; align-items: flex-start;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--muted);
+}
+.benefits-col-tag {
+  font-family: 'Space Mono', monospace; font-size: .62rem;
+  letter-spacing: .18em; text-transform: uppercase;
+  margin-bottom: .3rem;
+}
+.benefits-col-title {
+  font-family: 'Bebas Neue', sans-serif; font-size: 1.5rem;
+  letter-spacing: .05em; color: var(--text); line-height: 1.1;
+}
+.benefits-list {
+  list-style: none; display: flex; flex-direction: column; gap: 1.1rem;
+}
+.benefits-list li {
+  font-size: .9rem; font-weight: 300; line-height: 1.7;
+  color: var(--text-dim); padding-left: 1.2rem; position: relative;
+}
+.benefits-list li::before {
+  content: '→'; position: absolute; left: 0;
+  color: var(--muted); font-size: .8rem; top: .05rem;
+}
+.bi {
+  color: var(--text); font-weight: 500;
+}
+
+
+/* ── COMMUNITY VOTE ──────────────────────────────────────── */
+.vote-section {
+  background: var(--mid); border-top: 1px solid var(--muted);
+  padding: 8rem 4rem; position: relative; z-index: 1; text-align: center;
+}
+.vote-sub { font-size:1rem; font-weight:300; color:var(--text-dim); line-height:1.7; max-width:480px; margin:0 auto 3.5rem; }
+.vote-arena { display:flex; align-items:center; justify-content:center; gap:2rem; flex-wrap:wrap; }
+.vote-card {
+  position:relative; overflow:hidden; background:var(--surface); border:1px solid var(--muted);
+  padding:2.5rem 2rem 2rem; width:260px; cursor:none;
+  transition:border-color .25s, transform .2s;
+  display:flex; flex-direction:column; align-items:center; gap:.7rem;
+}
+.vote-card:hover { transform:translateY(-4px); }
+.vote-card.voted-solar   { border-color:var(--sun);      box-shadow:0 0 30px rgba(245,166,35,.15); }
+.vote-card.voted-kinetic { border-color:var(--electric); box-shadow:0 0 30px rgba(0,229,255,.12); }
+.vote-card-glow { position:absolute; inset:0; opacity:0; transition:opacity .4s; pointer-events:none; }
+.solar-glow   { background:radial-gradient(ellipse at 50% 0%,rgba(245,166,35,.18),transparent 70%); }
+.kinetic-glow { background:radial-gradient(ellipse at 50% 0%,rgba(0,229,255,.12),transparent 70%); }
+.vote-card:hover .vote-card-glow,
+.vote-card.voted-solar .vote-card-glow,
+.vote-card.voted-kinetic .vote-card-glow { opacity:1; }
+.vote-card-name  { font-family:'Bebas Neue',sans-serif; font-size:2.2rem; letter-spacing:.08em; color:var(--text); line-height:1; }
+.vote-card-label { font-family:'Space Mono',monospace; font-size:.6rem; letter-spacing:.15em; text-transform:uppercase; color:var(--text-dim); }
+.vote-bar-wrap   { width:100%; height:4px; background:var(--muted); border-radius:2px; overflow:hidden; margin-top:.5rem; }
+.vote-bar        { height:100%; border-radius:2px; transition:width .8s cubic-bezier(.4,0,.2,1); }
+.solar-bar       { background:var(--sun); }
+.kinetic-bar     { background:var(--electric); }
+.vote-pct   { font-family:'Bebas Neue',sans-serif; font-size:3rem; letter-spacing:.04em; line-height:1; color:var(--text); }
+.vote-count { font-family:'Space Mono',monospace; font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; color:var(--text-dim); min-height:.9rem; }
+.vote-cta   { font-family:'Space Mono',monospace; font-size:.6rem; letter-spacing:.15em; text-transform:uppercase; color:var(--text-dim); margin-top:.5rem; transition:color .2s; }
+.vote-card:hover .vote-cta { color:var(--electric); }
+.vote-card.voted-solar .vote-cta, .vote-card.voted-kinetic .vote-cta { display:none; }
+.vote-vs { font-family:'Bebas Neue',sans-serif; font-size:2.5rem; letter-spacing:.1em; color:var(--muted); }
+.vote-total { font-family:'Space Mono',monospace; font-size:.68rem; letter-spacing:.15em; text-transform:uppercase; color:var(--text-dim); margin-top:2rem; }
+.vote-totals-block { margin-top:3rem; display:flex; flex-direction:column; align-items:center; gap:.4rem; }
+.vote-total-big { font-family:'Bebas Neue',sans-serif; font-size:5rem; letter-spacing:.06em; color:var(--text); line-height:1; transition:all .4s; }
+.vote-total-label { font-family:'Space Mono',monospace; font-size:.7rem; letter-spacing:.22em; text-transform:uppercase; color:var(--text-dim); }
+.vote-total-sub { font-family:'Space Mono',monospace; font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-top:.3rem; }
+.vote-voted { margin-top:1.2rem; display:flex; align-items:center; justify-content:center; gap:1rem; flex-wrap:wrap; }
+#voteVotedLabel { font-family:'Space Mono',monospace; font-size:.68rem; letter-spacing:.12em; text-transform:uppercase; color:var(--text); }
+.vote-change { font-family:'Space Mono',monospace; font-size:.6rem; letter-spacing:.12em; text-transform:uppercase; background:transparent; border:1px solid var(--muted); color:var(--text-dim); padding:.35rem .8rem; cursor:none; transition:border-color .2s,color .2s; }
+.vote-change:hover { border-color:var(--electric); color:var(--electric); }
+
+.sponsors-bar {
+  position: relative; z-index: 1;
+  background: var(--mid);
+  border-top: 1px solid var(--muted);
+  border-bottom: 1px solid var(--muted);
+  overflow: hidden;
+  padding: 1rem 0 1.1rem;
+}
+.sponsors-label {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.4rem; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--text);
+  text-align: center; margin-bottom: .8rem;
+  position: relative; z-index: 3;
+}
+.sponsors-bar::before,
+.sponsors-bar::after {
+  content: '';
+  position: absolute; top: 0; bottom: 0; width: 120px; z-index: 2;
+  pointer-events: none;
+}
+.sponsors-bar::before { left: 0;  background: linear-gradient(to right, var(--mid), transparent); }
+.sponsors-bar::after  { right: 0; background: linear-gradient(to left,  var(--mid), transparent); }
+
+.sponsors-track {
+  display: flex; align-items: center; gap: 0;
+  white-space: nowrap;
+  animation: ticker 28s linear infinite;
+  width: max-content;
+}
+.sponsors-track:hover { animation-play-state: paused; }
+
+.sponsor {
+  font-family: 'Space Mono', monospace;
+  font-size: .72rem; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--text-dim);
+  padding: 0 2rem;
+  transition: color .2s;
+  cursor: default;
+}
+.sponsors-track:hover .sponsor { color: var(--text); }
+.sponsor:hover { color: var(--sun) !important; }
+
+.dot {
+  color: var(--sun);
+  font-size: .9rem;
+  opacity: .6;
+  flex-shrink: 0;
+}
+
+@keyframes ticker {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+
+footer {
+  position:relative; z-index:1; background:var(--deep);
+  border-top:1px solid var(--muted); padding:2.5rem 4rem;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.footer-logo { font-family:'Bebas Neue',sans-serif; font-size:1.4rem; letter-spacing:.1em; }
+.footer-logo span { color:var(--electric); }
+.footer-copy { font-family:'Space Mono',monospace; font-size:.62rem; letter-spacing:.1em; color:var(--text-dim); }
+.footer-links { display:flex; gap:2rem; list-style:none; }
+.footer-links a { font-family:'Space Mono',monospace; font-size:.62rem; letter-spacing:.1em; text-transform:uppercase; color:var(--text-dim); text-decoration:none; transition:color .2s; cursor:none; }
+.footer-links a:hover { color:var(--electric); }
+.portal-footer-note { font-family:'Space Mono',monospace; font-size:.58rem; letter-spacing:.15em; color:var(--text-dim); margin-left:1rem; }
+
+/* ── RESPONSIVE ─────────────────────────────────────────── */
+
+/* LAPTOP (900px–1280px) */
+@media (max-width:1280px) and (min-width:901px) {
+  nav { padding:1rem 2.5rem; }
+  section, .cta-section { padding:6rem 2.5rem; }
+  .hero { padding:0 2.5rem; }
+  .stats-bar { padding:1.5rem 2.5rem; }
+  .hero-title { font-size:clamp(4rem,8vw,7rem); }
+  .how-grid { gap:3rem; }
+  .vb-grid  { gap:3rem; }
+  .products-grid { grid-template-columns:repeat(3,1fr); }
+  .form-panel { padding:4rem 2.5rem; gap:3rem; }
+  .status-panel { padding:4rem 2.5rem; }
+  .portal-body  { padding:2.5rem; gap:1.5px; }
+  .metrics-grid { grid-template-columns:repeat(4,1fr); }
+  .tile-diagram { padding:1.8rem; }
+  footer { padding:2rem 2.5rem; }
+  .nav-dropdown { padding:5rem 2.5rem 2rem; }
+}
+
+/* TABLET + MOBILE (≤900px) */
+@media (max-width:900px) {
+  .cursor, .cursor-ring { display:none; }
+  body { cursor:auto; }
+  a, button { cursor:pointer; }
+
+  nav { padding:1rem 1.2rem; }
+  .nav-links { display:none; }
+  .nav-cta { padding:.45rem 1rem; font-size:.65rem; }
+  .logo-wordmark { font-size:1.4rem; }
+  .logo-mark { width:30px; height:30px; }
+  .nav-dropdown { padding:5rem 1.2rem 2rem; }
+  .dropdown-items a, .dropdown-items button { font-size:clamp(1.4rem,6vw,2rem); }
+
+  section { padding:4rem 1.2rem; }
+  .cta-section  { padding:4rem 1.2rem; grid-template-columns:1fr; gap:2.5rem; }
+  .form-panel   { padding:4rem 1.2rem; grid-template-columns:1fr; gap:2rem; }
+  .status-panel { padding:4rem 1.2rem; }
+  .portal-body  { padding:0; grid-template-columns:1fr; gap:1.5px; }
+  .portal-hero  { padding:8rem 1.2rem 3rem; }
+
+  .hero { padding:0 1.2rem; min-height:100svh; }
+  .hero-title { font-size:clamp(3rem,13vw,5rem); }
+  .hero-sub   { font-size:1rem; }
+  .hero-actions { flex-direction:column; align-items:flex-start; gap:.8rem; }
+  .btn-primary, .btn-ghost { font-size:.72rem; }
+
+  .stats-bar { padding:1.5rem 1.2rem; grid-template-columns:repeat(2,1fr); gap:1.5rem; }
+  .stat-item { padding:0 1rem; }
+  .stat-num  { font-size:2.2rem; }
+
+  .section-title { font-size:clamp(2.2rem,9vw,3.5rem); }
+  .how-grid  { grid-template-columns:1fr; gap:2.5rem; }
+  .benefits-grid { grid-template-columns:1fr; gap:1.5rem; }
+  .benefits-section { padding:4rem 1.2rem; }
+  .vote-section { padding:5rem 1.2rem; }
+  .vote-card { width:100%; max-width:320px; }
+  .vote-arena { flex-direction:column; gap:1rem; }
+  .vote-vs { transform:rotate(0deg); }
+  .vb-grid   { grid-template-columns:1fr; gap:2rem; }
+  .products-grid { grid-template-columns:1fr; gap:1.5px; }
+
+  .tile-diagram { padding:1.2rem; }
+  .layer-bar    { width:80px; }
+  .diagram-stats { gap:1.2rem; flex-wrap:wrap; }
+  .vb-map { height:280px; }
+
+  .quote::before { font-size:5rem; top:-2rem; left:-1rem; }
+  .quote { font-size:1.1rem; }
+
+  .metrics-grid { grid-template-columns:repeat(2,1fr); gap:1px; }
+  .metric       { padding:1.2rem 1rem; }
+  .metric-val   { font-size:2rem; }
+  .chart-row    { grid-template-columns:1fr; gap:1rem; }
+
+  .form-intro h2 { font-size:2.5rem; }
+  .tile-selector { grid-template-columns:repeat(3,1fr); gap:.5rem; }
+  .form-row      { flex-direction:column; gap:.8rem; }
+  .portal-title  { font-size:clamp(3rem,12vw,5rem); }
+  .status-header { flex-direction:column; gap:.5rem; align-items:flex-start; }
+
+  footer { flex-direction:column; gap:1.2rem; text-align:center; padding:2rem 1.2rem; }
+  .footer-links { justify-content:center; flex-wrap:wrap; gap:1rem; }
+  .back-link { font-size:.6rem; }
+  .nav-badge { font-size:.55rem; padding:.3rem .6rem; }
+}
+
+/* SMALL MOBILE (≤480px) */
+@media (max-width:480px) {
+  .hero-title  { font-size:clamp(2.6rem,14vw,4rem); }
+  .hero-sub    { font-size:.92rem; }
+  .stats-bar   { grid-template-columns:repeat(2,1fr); }
+  .stat-num    { font-size:1.9rem; }
+  .metrics-grid { grid-template-columns:1fr 1fr; }
+  .tile-selector { grid-template-columns:1fr; }
+  .form-intro h2 { font-size:2rem; }
+  .portal-title  { font-size:clamp(2.5rem,13vw,4rem); }
+  .section-title { font-size:clamp(2rem,10vw,3rem); }
+  nav { padding:.9rem 1rem; }
+  .logo-wordmark { font-size:1.2rem; }
+  .logo-mark { width:26px; height:26px; }
+  .nav-cta { display:none; }
+}
+</style>
+</head>
+<body>
+
+<!-- FIXED CHROME -->
+<div class="cursor"      id="cursor"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+<div class="grid-bg"></div>
+<div class="scanlines"></div>
+<div class="page-cover"  id="pageCover"></div>
+
+<!-- NAV -->
+<nav id="mainNav" class="home-nav">
+  <!-- LOGO: mark + wordmark -->
+  <a href="#" class="logo" onclick="navigate('home');window.scrollTo({top:0,behavior:'smooth'});return false;">
+    <svg class="logo-mark" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="4" y="4" width="92" height="92" rx="4" stroke="white" stroke-width="6"/>
+      <rect x="16" y="16" width="30" height="30" fill="white"/>
+      <rect x="54" y="16" width="30" height="30" fill="white"/>
+      <rect x="16" y="54" width="30" height="30" fill="white"/>
+      <!-- house icon bottom-right -->
+      <polygon points="69,54 84,68 54,68" fill="white"/>
+      <rect x="58" y="68" width="22" height="16" fill="white"/>
+      <rect x="65" y="74" width="8" height="10" fill="#0A0E1A"/>
+    </svg>
+    <span class="logo-wordmark">Nex<span>Grid</span></span>
+  </a>
+
+  <!-- CENTER: inline nav links (hidden on mobile) -->
+  <ul class="nav-links">
+    <li><a href="#how"            onclick="navScrollTo('how');           return false;">Science</a></li>
+    <li><a href="#products"       onclick="navScrollTo('products');      return false;">Products</a></li>
+    <li><a href="#benefits"       onclick="navScrollTo('benefits');      return false;">Benefits</a></li>
+    <li><a href="#community-vote" onclick="navScrollTo('community-vote');return false;">Community</a></li>
+  </ul>
+
+  <!-- RIGHT: cta + portal badge + hamburger -->
+  <div class="nav-right">
+    <span class="nav-badge">Restricted Access</span>
+    <button class="nav-cta" onclick="navigate('portal')">Get a Quote</button>
+    <a href="#" class="back-link" onclick="navigate('home');return false;">Back to Site</a>
+    <button class="search-btn" onclick="openSearch()" aria-label="Search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/></svg>
+    </button>
+    <button class="hamburger" id="hamburgerBtn" onclick="toggleDropdown()" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+
+<!-- DROPDOWN MENU -->
+<div class="nav-dropdown" id="navDropdown">
+  <ul class="dropdown-items">
+    <li><a href="#" onclick="dropNav('how');            return false;">Technology</a></li>
+    <li><a href="#" onclick="dropNav('products');       return false;">Products</a></li>
+    <li><a href="#" onclick="dropNav('benefits');       return false;">Benefits</a></li>
+    <li><a href="#" onclick="dropNav('community-vote'); return false;">Community</a></li>
+    <li><a href="#" onclick="dropNav('vb');             return false;">Virginia Beach</a></li>
+    <li><a href="#" onclick="dropNav('contact');        return false;">Contact</a></li>
+  </ul>
+</div>
+
+<!-- SEARCH OVERLAY -->
+<div class="search-overlay" id="searchOverlay">
+  <button class="search-close" onclick="closeSearch()">✕ Close</button>
+  <div class="search-input-wrap">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/></svg>
+    <input id="searchInput" type="text" placeholder="Search NexGrid…" oninput="doSearch(this.value)" autocomplete="off">
+  </div>
+  <div class="search-results" id="searchResults"></div>
+  <div class="search-empty" id="searchEmpty">No results found</div>
+</div>
+<div id="page-home" class="page active">
+
+  <!-- HERO -->
+  <section class="hero">
+    <canvas id="heroCanvas"></canvas>
+    <div class="hero-content">
+      <div class="hero-eyebrow">Virginia Beach, VA · Est. 2026</div>
+      <h1 class="hero-title">Power<br>Under<br><span class="accent">Every Step</span></h1>
+      <p class="hero-sub">NexGrid engineers solar kinetic paving tiles that convert sunlight and footfall into clean electricity — turning walkways, plazas, and roads into distributed energy infrastructure.</p>
+
+    </div>
+
+  </section>
+
+  <!-- STATS -->
+  <div class="stats-bar">
+    <div class="stat-item"><div class="stat-num">47W</div><div class="stat-label">Peak output per tile</div></div>
+    <div class="stat-item"><div class="stat-num">2.4M</div><div class="stat-label">Steps harvested daily</div></div>
+    <div class="stat-item"><div class="stat-num">IP68</div><div class="stat-label">Weather resistance</div></div>
+    <div class="stat-item"><div class="stat-num">30yr</div><div class="stat-label">Product lifespan</div></div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <section id="how">
+    <div class="section-tag">Technology</div>
+    <h2 class="section-title">Dual-Source<br>Energy Capture</h2>
+    <div class="how-grid">
+      <div class="steps">
+        <div class="step reveal"><div class="step-num">01</div><div class="step-body"><h3>Photovoltaic Surface Layer</h3><p>Each tile's top surface integrates tempered, slip-resistant solar glass with monocrystalline silicon cells at 23.4% efficiency — capturing direct and diffuse sunlight even on overcast Virginia Beach days.</p></div></div>
+        <div class="step reveal"><div class="step-num">02</div><div class="step-body"><h3>Piezoelectric Kinetic Core</h3><p>A ceramic piezoelectric lattice beneath the surface converts the compression of every footstep, bicycle, or vehicle into electrical charge — harvesting energy that would otherwise be lost as vibration.</p></div></div>
+        <div class="step reveal"><div class="step-num">03</div><div class="step-body"><h3>Smart Micro-Inverter</h3><p>Embedded power electronics aggregate both energy streams, condition the DC output, and deliver regulated power to our NexGrid mesh network — or directly to local loads like lighting and signage.</p></div></div>
+        <div class="step reveal"><div class="step-num">04</div><div class="step-body"><h3>Grid-Ready Distribution</h3><p>Tile clusters self-organize into micro-grids, with optional battery buffer modules. Real-time monitoring via the NexGrid dashboard tracks output, health, and ROI for every installation.</p></div></div>
+      </div>
+      <div class="tile-diagram reveal">
+        <div style="font-family:'Space Mono',monospace;font-size:.68rem;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim);margin-bottom:1.5rem;">NX-7 Cross Section</div>
+        <div class="layer"><div class="layer-bar solar"></div><div class="layer-info"><div class="name">Solar Glass</div><div class="desc">12mm tempered, anti-reflective, 23.4% efficiency</div></div></div>
+        <div class="layer"><div class="layer-bar kinetic"></div><div class="layer-info"><div class="name">Piezo Array</div><div class="desc">Ceramic lattice, 0.8mm deflection harvest</div></div></div>
+        <div class="layer"><div class="layer-bar convert"></div><div class="layer-info"><div class="name">Power Module</div><div class="desc">MPPT micro-inverter, dual-channel conditioning</div></div></div>
+        <div class="layer"><div class="layer-bar struct"></div><div class="layer-info"><div class="name">Structural Core</div><div class="desc">Carbon-reinforced polymer, 40-ton load rating</div></div></div>
+        <div class="layer"><div class="layer-bar heat"></div><div class="layer-info"><div class="name">Heat Reflective Coating</div><div class="desc">Ceramic-infused IR barrier, reduces surface temp by up to 43°F</div></div></div>
+        <div class="layer"><div class="layer-bar grid"></div><div class="layer-info"><div class="name">Mesh Connector</div><div class="desc">Plug-and-play interlocking NexGrid bus</div></div></div>
+        <div class="diagram-stats">
+          <div><div class="ds-val" style="color:var(--sun)">47W</div><div class="ds-lbl">Peak Dual Output</div></div>
+          <div><div class="ds-val" style="color:var(--electric)">600kg</div><div class="ds-lbl">Load per tile</div></div>
+          <div><div class="ds-val" style="color:var(--text)">30yr</div><div class="ds-lbl">Rated lifespan</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRODUCTS -->
+  <section id="products" style="background:var(--mid);border-top:1px solid var(--muted);">
+    <div class="section-tag">Products</div>
+    <h2 class="section-title">The NexGrid<br>Tile Family</h2>
+    <p style="color:var(--text-dim);font-weight:300;font-size:1rem;max-width:500px;line-height:1.7;margin-top:.5rem;">Three configurations engineered for pedestrian plazas, mixed-use streetscapes, and light-vehicle roadways.</p>
+    <div class="products-grid">
+      <!-- NX-3 -->
+      <div class="product-card reveal">
+        <svg class="product-icon" viewBox="0 0 56 56" fill="none"><rect x="4" y="4" width="48" height="48" rx="4" fill="rgba(0,229,255,.1)" stroke="#00E5FF" stroke-width="1.5"/><rect x="12" y="12" width="14" height="14" rx="1" fill="rgba(0,229,255,.3)"/><rect x="30" y="12" width="14" height="14" rx="1" fill="rgba(0,229,255,.3)"/><rect x="12" y="30" width="14" height="14" rx="1" fill="rgba(0,229,255,.3)"/><rect x="30" y="30" width="14" height="14" rx="1" fill="rgba(0,229,255,.3)"/></svg>
+        <div class="product-name">NX-3 Pedestrian</div>
+        <div class="product-model">Model NX-3 · 30×30cm</div>
+        <p class="product-desc">Designed for high-foot-traffic plazas, boardwalks, and transit hubs. Textured slip-resistant surface rated for accessibility compliance.</p>
+        <div class="product-cost"><span class="cost-label">Cost</span><span class="cost-value">$100 / sq ft</span></div>
+        <div class="product-specs">
+          <div class="spec-row"><span class="sk">Solar Output</span><span class="sv">18W pk</span></div>
+          <div class="spec-row"><span class="sk">Kinetic Output</span><span class="sv">6W avg</span></div>
+          <div class="spec-row"><span class="sk">Load Rating</span><span class="sv">600 kg</span></div>
+          <div class="spec-row"><span class="sk">Surface</span><span class="sv">R12 Anti-slip</span></div>
+          <div class="spec-row"><span class="sk">Connectivity</span><span class="sv">NexGrid Mesh</span></div>
+        </div>
+      </div>
+      <!-- NX-7 -->
+      <div class="product-card reveal" style="border-top:2px solid var(--sun);">
+        <div class="popular-badge">Most Popular</div>
+        <svg class="product-icon" viewBox="0 0 56 56" fill="none"><rect x="4" y="4" width="48" height="48" rx="4" fill="rgba(245,166,35,.1)" stroke="#F5A623" stroke-width="1.5"/><circle cx="28" cy="28" r="12" fill="rgba(245,166,35,.25)" stroke="#F5A623" stroke-width="1"/><circle cx="28" cy="28" r="5" fill="rgba(245,166,35,.6)"/><line x1="28" y1="12" x2="28" y2="8" stroke="#F5A623" stroke-width="1.5"/><line x1="28" y1="48" x2="28" y2="44" stroke="#F5A623" stroke-width="1.5"/><line x1="12" y1="28" x2="8" y2="28" stroke="#F5A623" stroke-width="1.5"/><line x1="48" y1="28" x2="44" y2="28" stroke="#F5A623" stroke-width="1.5"/></svg>
+        <div class="product-name">NX-7 Urban</div>
+        <div class="product-model">Model NX-7 · 45×45cm</div>
+        <p class="product-desc">Our flagship dual-source tile for mixed-use streetscapes and commercial developments. Integrated LED status indicators and NFC data tap.</p>
+        <div class="product-cost"><span class="cost-label">Cost</span><span class="cost-value">$200 / sq ft</span></div>
+        <div class="product-specs">
+          <div class="spec-row"><span class="sk">Solar Output</span><span class="sv">32W pk</span></div>
+          <div class="spec-row"><span class="sk">Kinetic Output</span><span class="sv">15W avg</span></div>
+          <div class="spec-row"><span class="sk">Load Rating</span><span class="sv">2,000 kg</span></div>
+          <div class="spec-row"><span class="sk">Surface</span><span class="sv">R13 + LED ring</span></div>
+          <div class="spec-row"><span class="sk">Connectivity</span><span class="sv">Mesh + NFC + BLE</span></div>
+        </div>
+      </div>
+      <!-- NX-12 -->
+      <div class="product-card reveal">
+        <svg class="product-icon" viewBox="0 0 56 56" fill="none"><rect x="4" y="4" width="48" height="48" rx="4" fill="rgba(100,180,255,.08)" stroke="rgba(100,180,255,.5)" stroke-width="1.5"/><rect x="8" y="20" width="40" height="16" rx="2" fill="rgba(100,180,255,.15)" stroke="rgba(100,180,255,.4)" stroke-width="1"/><circle cx="16" cy="40" r="6" fill="rgba(100,180,255,.2)" stroke="rgba(100,180,255,.5)" stroke-width="1"/><circle cx="40" cy="40" r="6" fill="rgba(100,180,255,.2)" stroke="rgba(100,180,255,.5)" stroke-width="1"/></svg>
+        <div class="product-name">NX-12 Roadway</div>
+        <div class="product-model">Model NX-12 · 60×60cm</div>
+        <p class="product-desc">Heavy-duty configuration for bike lanes, parking lots, and low-speed vehicle roads. Meets AASHTO load requirements. Traction-optimized ribbed surface.</p>
+        <div class="product-cost"><span class="cost-label">Cost</span><span class="cost-value">$500 / sq ft</span></div>
+        <div class="product-specs">
+          <div class="spec-row"><span class="sk">Solar Output</span><span class="sv">47W pk</span></div>
+          <div class="spec-row"><span class="sk">Kinetic Output</span><span class="sv">28W avg</span></div>
+          <div class="spec-row"><span class="sk">Load Rating</span><span class="sv">12,000 kg</span></div>
+          <div class="spec-row"><span class="sk">Surface</span><span class="sv">Ribbed R14</span></div>
+          <div class="spec-row"><span class="sk">Connectivity</span><span class="sv">Mesh + Embedded μCTU</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BENEFITS -->
+  <section id="benefits" class="benefits-section">
+    <div class="section-tag">Why NexGrid</div>
+    <h2 class="section-title">The Case for<br>Dual-Source Paving</h2>
+    <div class="benefits-grid">
+      <div class="benefits-col reveal">
+        <div class="benefits-col-header">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="6" fill="#F5A623"/><line x1="16" y1="2" x2="16" y2="6" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="16" y1="26" x2="16" y2="30" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="2" y1="16" x2="6" y2="16" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="26" y1="16" x2="30" y2="16" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="5.86" y1="5.86" x2="8.69" y2="8.69" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="23.31" y1="23.31" x2="26.14" y2="26.14" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="26.14" y1="5.86" x2="23.31" y2="8.69" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="8.69" y1="23.31" x2="5.86" y2="26.14" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/></svg>
+          <div>
+            <div class="benefits-col-tag" style="color:var(--sun)">Solar Paving</div>
+            <div class="benefits-col-title">Benefits of Photovoltaic Tiles</div>
+          </div>
+        </div>
+        <ul class="benefits-list">
+          <li><span class="bi">Passive energy generation</span> — produces electricity during daylight with zero moving parts or maintenance overhead.</li>
+          <li><span class="bi">Distributed generation</span> — power is produced at the point of use, reducing transmission losses by up to 8%.</li>
+          <li><span class="bi">Urban heat island mitigation</span> — reflective solar surfaces lower ambient temperatures compared to asphalt.</li>
+          <li><span class="bi">ITC tax incentive eligible</span> — qualifies for the 30% federal Investment Tax Credit under the Inflation Reduction Act.</li>
+          <li><span class="bi">30-year ROI</span> — over a 30-year lifespan, a 10,000 sq ft installation can offset $280,000+ in grid energy costs.</li>
+          <li><span class="bi">Carbon offset</span> — every 1,000 NX-7 tiles installed offsets approximately 42 metric tons of CO₂ annually.</li>
+          <li><span class="bi">Grid-tie or off-grid</span> — flexible architecture supports both utility interconnection and island-mode microgrids.</li>
+        </ul>
+      </div>
+      <div class="benefits-col reveal">
+        <div class="benefits-col-header">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none"><path d="M16 4 L20 14 L30 14 L22 20 L25 30 L16 24 L7 30 L10 20 L2 14 L12 14 Z" fill="rgba(0,229,255,0.15)" stroke="#00E5FF" stroke-width="1.5" stroke-linejoin="round"/></svg>
+          <div>
+            <div class="benefits-col-tag" style="color:var(--electric)">Kinetic Paving</div>
+            <div class="benefits-col-title">Benefits of Piezoelectric Tiles</div>
+          </div>
+        </div>
+        <ul class="benefits-list">
+          <li><span class="bi">Immediate energy conversion</span> — piezoelectric tiles convert mechanical pressure into usable electricity in milliseconds, with no warm-up period or storage delay.</li>
+          <li><span class="bi">Zero visual footprint</span> — generates energy from existing foot traffic with no visible infrastructure change.</li>
+          <li><span class="bi">Vibration damping</span> — the piezo lattice absorbs structural vibration, extending pavement lifespan by reducing micro-fractures.</li>
+          <li><span class="bi">Transit hub optimized</span> — high foot-traffic locations like stations and airports can generate 18–28W per tile continuously.</li>
+          <li><span class="bi">Shock load tolerance</span> — the NX-12 withstands 12,000kg per tile, suitable for delivery vehicles and emergency access routes.</li>
+          <li><span class="bi">Complementary peak generation</span> — kinetic output peaks during rush hours, exactly when grid demand is highest.</li>
+          <li><span class="bi">Reduced HVAC loads</span> — combined with heat reflective coating, surface temps drop up to 43°F, cutting cooling demand in adjacent buildings.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- VIRGINIA BEACH -->
+  <section id="vb" class="vb-section">
+    <div class="vb-grid">
+      <div class="vb-text reveal">
+        <div class="section-tag">Our Home</div>
+        <h2 class="section-title">Built in<br>Virginia Beach</h2>
+        <p>NexGrid was founded in Virginia Beach in 2019, drawn by the city's 3,100 annual hours of sunshine, 38 miles of coastline, and a municipal commitment to net-zero by 2040.</p>
+        <p>Our manufacturing facility on Corporate Landing Parkway produces over 80,000 tiles annually. Every tile is designed, tested, and warranted here — from the Oceanfront boardwalk to the Norfolk–Virginia Beach corridor.</p>
+        <p>We partner with the City of Virginia Beach, Hampton Roads Sanitation District, and private developers to embed clean energy generation into the infrastructure people walk on every day.</p>
+        <div class="badge-row">
+          <span class="badge highlight">VB Green Business</span>
+          <span class="badge">DOE Partner</span>
+          <span class="badge">VA MWBE Certified</span>
+          <span class="badge">LEED Compatible</span>
+          <span class="badge">Buy American Compliant</span>
+        </div>
+      </div>
+      <div class="vb-map reveal">
+        <svg viewBox="0 0 480 420" xmlns="http://www.w3.org/2000/svg">
+          <rect width="480" height="420" fill="#0A0E1A"/>
+          <path d="M320 0 L480 0 L480 420 L300 420 Q320 350 310 280 Q300 200 320 150 Z" fill="rgba(0,229,255,.07)"/>
+          <path d="M315 50 Q310 120 305 180 Q298 250 295 310 Q292 370 285 420" stroke="rgba(0,229,255,.3)" stroke-width="1.5" fill="none"/>
+          <line x1="0" y1="100" x2="480" y2="100" stroke="rgba(0,229,255,.06)" stroke-width="1"/>
+          <line x1="0" y1="200" x2="480" y2="200" stroke="rgba(0,229,255,.06)" stroke-width="1"/>
+          <line x1="0" y1="300" x2="480" y2="300" stroke="rgba(0,229,255,.06)" stroke-width="1"/>
+          <line x1="100" y1="0" x2="100" y2="420" stroke="rgba(0,229,255,.06)" stroke-width="1"/>
+          <line x1="200" y1="0" x2="200" y2="420" stroke="rgba(0,229,255,.06)" stroke-width="1"/>
+          <line x1="300" y1="0" x2="300" y2="420" stroke="rgba(0,229,255,.06)" stroke-width="1"/>
+          <line x1="400" y1="0" x2="400" y2="420" stroke="rgba(0,229,255,.06)" stroke-width="1"/>
+          <line x1="0" y1="210" x2="320" y2="210" stroke="rgba(255,255,255,.1)" stroke-width="3"/>
+          <line x1="160" y1="0" x2="160" y2="420" stroke="rgba(255,255,255,.08)" stroke-width="2"/>
+          <line x1="60" y1="0" x2="290" y2="280" stroke="rgba(255,255,255,.06)" stroke-width="2"/>
+          <line x1="285" y1="120" x2="295" y2="380" stroke="rgba(245,166,35,.4)" stroke-width="3"/>
+          <text x="240" y="250" fill="rgba(245,166,35,.7)" font-family="Space Mono,monospace" font-size="8" letter-spacing="2" transform="rotate(-90,240,250)">BOARDWALK</text>
+          <circle cx="150" cy="190" r="8" fill="rgba(0,229,255,.2)" stroke="#00E5FF" stroke-width="1.5"/>
+          <circle cx="150" cy="190" r="3" fill="#00E5FF"/>
+          <circle cx="150" cy="190" r="18" fill="none" stroke="rgba(0,229,255,.15)" stroke-width="1"><animate attributeName="r" values="8;24;8" dur="2.5s" repeatCount="indefinite"/><animate attributeName="opacity" values=".4;0;.4" dur="2.5s" repeatCount="indefinite"/></circle>
+          <text x="162" y="187" fill="#00E5FF" font-family="Space Mono,monospace" font-size="8" letter-spacing="1">HQ</text>
+          <text x="162" y="198" fill="rgba(0,229,255,.6)" font-family="Space Mono,monospace" font-size="6">Corporate Landing</text>
+          <circle cx="287" cy="200" r="4" fill="rgba(245,166,35,.4)" stroke="#F5A623" stroke-width="1"/>
+          <text x="258" y="198" fill="rgba(245,166,35,.7)" font-family="Space Mono,monospace" font-size="7">VB Oceanfront</text>
+          <circle cx="230" cy="150" r="4" fill="rgba(245,166,35,.4)" stroke="#F5A623" stroke-width="1"/>
+          <text x="235" y="148" fill="rgba(245,166,35,.7)" font-family="Space Mono,monospace" font-size="7">Town Center</text>
+          <text x="20" y="390" fill="rgba(255,255,255,.15)" font-family="Bebas Neue,sans-serif" font-size="28" letter-spacing="4">VIRGINIA BEACH</text>
+          <text x="20" y="408" fill="rgba(255,255,255,.08)" font-family="Space Mono,monospace" font-size="7" letter-spacing="3">36.8529° N  75.9780° W</text>
+          <text x="350" y="210" fill="rgba(0,229,255,.2)" font-family="Space Mono,monospace" font-size="9" letter-spacing="2">ATLANTIC</text>
+          <text x="355" y="224" fill="rgba(0,229,255,.2)" font-family="Space Mono,monospace" font-size="9" letter-spacing="2">OCEAN</text>
+          <line x1="150" y1="190" x2="287" y2="200" stroke="rgba(0,229,255,.2)" stroke-width="1" stroke-dasharray="4 4"><animate attributeName="stroke-dashoffset" values="0;-16" dur="1s" repeatCount="indefinite"/></line>
+          <line x1="150" y1="190" x2="230" y2="150" stroke="rgba(0,229,255,.2)" stroke-width="1" stroke-dasharray="4 4"><animate attributeName="stroke-dashoffset" values="0;-16" dur="1s" repeatCount="indefinite"/></line>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMMUNITY VOTE -->
+  <section id="community-vote" class="vote-section">
+    <div class="section-tag">Community</div>
+    <h2 class="section-title">Which Powers<br>Your World?</h2>
+    <p class="vote-sub">Cast your vote — results are live and shared with everyone who visits this page.</p>
+
+    <div class="vote-arena" id="voteArena">
+      <!-- SOLAR CARD -->
+      <div class="vote-card" id="voteSolar" onclick="castVote('solar')">
+        <div class="vote-card-glow solar-glow"></div>
+        <svg width="48" height="48" viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="6" fill="#F5A623"/><line x1="16" y1="2" x2="16" y2="6" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="16" y1="26" x2="16" y2="30" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="2" y1="16" x2="6" y2="16" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="26" y1="16" x2="30" y2="16" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="5.86" y1="5.86" x2="8.69" y2="8.69" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="23.31" y1="23.31" x2="26.14" y2="26.14" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="26.14" y1="5.86" x2="23.31" y2="8.69" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/><line x1="8.69" y1="23.31" x2="5.86" y2="26.14" stroke="#F5A623" stroke-width="2" stroke-linecap="round"/></svg>
+        <div class="vote-card-name">Solar</div>
+        <div class="vote-card-label">Photovoltaic Paving</div>
+        <div class="vote-bar-wrap">
+          <div class="vote-bar solar-bar" id="solarBar" style="width:50%"></div>
+        </div>
+        <div class="vote-pct" id="solarPct">—</div>
+        <div class="vote-count" id="solarCount"></div>
+        <div class="vote-cta">TAP TO VOTE</div>
+      </div>
+
+      <div class="vote-vs">VS</div>
+
+      <!-- KINETIC CARD -->
+      <div class="vote-card" id="voteKinetic" onclick="castVote('kinetic')">
+        <div class="vote-card-glow kinetic-glow"></div>
+        <svg width="48" height="48" viewBox="0 0 32 32" fill="none"><rect x="2" y="2" width="28" height="28" rx="4" stroke="#00E5FF" stroke-width="1.5"/><rect x="5" y="5" width="10" height="10" rx="2.5" fill="rgba(0,229,255,0.3)" stroke="#00E5FF" stroke-width="1"/><rect x="17" y="5" width="10" height="10" rx="2.5" fill="rgba(0,229,255,0.3)" stroke="#00E5FF" stroke-width="1"/><rect x="5" y="17" width="10" height="10" rx="2.5" fill="rgba(0,229,255,0.3)" stroke="#00E5FF" stroke-width="1"/><rect x="17" y="17" width="10" height="10" rx="2.5" fill="rgba(0,229,255,0.3)" stroke="#00E5FF" stroke-width="1"/></svg>
+        <div class="vote-card-name">Kinetic</div>
+        <div class="vote-card-label">Piezoelectric Paving</div>
+        <div class="vote-bar-wrap">
+          <div class="vote-bar kinetic-bar" id="kineticBar" style="width:50%"></div>
+        </div>
+        <div class="vote-pct" id="kineticPct">—</div>
+        <div class="vote-count" id="kineticCount"></div>
+        <div class="vote-cta">TAP TO VOTE</div>
+      </div>
+    </div>
+
+    <div class="vote-totals-block">
+      <div class="vote-total-big" id="voteTotalBig">0</div>
+      <div class="vote-total-label">Total Votes Cast</div>
+      <div class="vote-total-sub" id="voteTotalLine">Be the first to vote</div>
+    </div>
+    <div class="vote-voted" id="voteVoted" style="display:none">
+      <span id="voteVotedLabel"></span>
+      <button class="vote-change" onclick="changeVote()">Change vote</button>
+    </div>
+  </section>
+
+  <!-- SPONSORS TICKER -->
+  <div class="sponsors-bar">
+    <div class="sponsors-label">Sponsors</div>
+    <div class="sponsors-track">
+      <span class="sponsor">Flint Water Podcast</span><span class="dot">·</span>
+      <span class="sponsor">The Flint Water Project</span><span class="dot">·</span>
+      <span class="sponsor">Grande Crater</span><span class="dot">·</span>
+      <span class="sponsor">ANN</span><span class="dot">·</span>
+      <span class="sponsor">Deep Dive</span><span class="dot">·</span>
+      <span class="sponsor">Qwerty INC</span><span class="dot">·</span>
+      <!-- duplicate for seamless loop -->
+      <span class="sponsor">Flint Water Podcast</span><span class="dot">·</span>
+      <span class="sponsor">The Flint Water Project</span><span class="dot">·</span>
+      <span class="sponsor">Grande Crater</span><span class="dot">·</span>
+      <span class="sponsor">ANN</span><span class="dot">·</span>
+      <span class="sponsor">Deep Dive</span><span class="dot">·</span>
+      <span class="sponsor">Qwerty INC</span><span class="dot">·</span>
+    </div>
+  </div>
+
+  <!-- TESTIMONIAL -->
+  <section class="testimonial-section reveal">
+    <div class="quote">The NexGrid tiles at the Oceanfront have generated over 180,000 kWh in their first year — enough to power all boardwalk lighting from May through October.</div>
+    <div class="quote-attr">— Anand Raghavan, CEO · Qwerty INC</div>
+  </section>
+
+  <!-- CONTACT -->
+  <div id="contact" class="cta-section">
+    <div class="contact-info reveal">
+      <div class="section-tag">Get In Touch</div>
+      <h2 class="section-title">Start Your<br>Project</h2>
+      <p style="font-size:1rem;font-weight:300;line-height:1.8;color:var(--text-dim);margin-bottom:2.5rem;">Whether you're designing a plaza, retrofitting a streetscape, or planning a commercial campus, our engineering team will spec the right tile configuration and calculate your ROI.</p>
+      <div class="info-items">
+        <div class="info-item">
+          <div class="info-icon">📍</div>
+          <div class="info-text">
+            <div class="it-label">Headquarters</div>
+            <div class="it-val">2214 Corporate Landing Pkwy<br>Virginia Beach, VA 23454</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="reveal">
+      <div style="font-family:'Space Mono',monospace;font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--electric);margin-bottom:.5rem;">Request a Quote</div>
+      <div class="contact-form">
+        <div class="form-row">
+          <div class="form-field"><label>First Name</label><input type="text" placeholder="Jane"></div>
+          <div class="form-field"><label>Last Name</label><input type="text" placeholder="Smith"></div>
+        </div>
+        <div class="form-field"><label>Email Address</label><input type="email" placeholder="jane@company.com"></div>
+        <div class="form-field"><label>Organization</label><input type="text" placeholder="City of Virginia Beach / Developer / Architect"></div>
+        <div class="form-field">
+          <label>Project Type</label>
+          <select>
+            <option value="">Select project type…</option>
+            <option>Pedestrian Plaza / Boardwalk</option>
+            <option>Mixed-Use Streetscape</option>
+            <option>Bike Lane / Pathway</option>
+            <option>Parking / Light Roadway</option>
+            <option>Campus / Commercial</option>
+            <option>Municipal / Government</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-field"><label>Estimated Area (sq ft)</label><input type="text" placeholder="e.g. 5,000 sq ft"></div>
+        <div class="form-field"><label>Message</label><textarea placeholder="Tell us about your project goals, timeline, and any questions…"></textarea></div>
+        <button class="submit-btn" id="sendRequestBtn" onclick="sendRequest(this)">Send Request →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-logo">Nex<span>Grid</span></div>
+    <div class="footer-copy">© 2026 NexGrid Inc. · Virginia Beach, VA · All Rights Reserved</div>
+    <ul class="footer-links">
+      <li><a href="#">Privacy</a></li>
+      <li><a href="#">Terms</a></li>
+      <li><a href="#">Careers</a></li>
+      <li><a href="#">Investors</a></li>
+    </ul>
+  </footer>
+
+</div><!-- /page-home -->
+
+<!-- ══════════════ PORTAL PAGE ══════════════ -->
+<div id="page-portal" class="page">
+
+  <!-- PORTAL HERO -->
+  <div class="portal-hero">
+    <div class="access-tag">Authorized Partners Only</div>
+    <h1 class="portal-title">Partner<br><span class="dim">Portal</span></h1>
+    <p class="portal-sub">Welcome to the NexGrid partner hub. Access product documentation, submit quote requests, and monitor your installation's live energy output.</p>
+  </div>
+
+  <!-- PORTAL CARDS -->
+  <div class="portal-body">
+    <div class="portal-card reveal">
+      <span class="card-icon">📐</span>
+      <div class="card-tag">Engineering</div>
+      <div class="card-title">Design & Spec Toolkit</div>
+      <p class="card-desc">Download CAD files, load specs, electrical schematics, and NexGrid mesh integration guides for all three tile models — NX-3, NX-7, and NX-12.</p>
+      <a href="#portal-quote" class="card-btn" onclick="document.getElementById('portal-quote').scrollIntoView({behavior:'smooth'});return false;">Download Docs</a>
+    </div>
+    <div class="portal-card reveal">
+      <span class="card-icon">⚡</span>
+      <div class="card-tag">Live Data</div>
+      <div class="card-title">Installation Dashboard</div>
+      <p class="card-desc">Real-time energy output, tile health diagnostics, and predictive maintenance alerts for your active NexGrid deployments across Virginia Beach.</p>
+      <a href="#portal-status" class="card-btn sun" onclick="document.getElementById('portal-status').scrollIntoView({behavior:'smooth'});return false;">View Dashboard</a>
+    </div>
+    <div class="portal-card locked reveal">
+      <span class="card-icon">🔬</span>
+      <div class="card-tag">R&D</div>
+      <div class="card-title">NX-15 Beta Program</div>
+      <p class="card-desc">Early access to our next-generation 72W dual-perovskite tile — invitations being extended to select partners in Q3 2025.</p>
+      <a href="#" class="card-btn">Request Access</a>
+    </div>
+    <div class="portal-card locked reveal">
+      <span class="card-icon">📊</span>
+      <div class="card-tag">Finance</div>
+      <div class="card-title">ROI Modeling Suite</div>
+      <p class="card-desc">Project-specific energy yield models, ITC incentive calculators, and 30-year lifecycle cost analyses. Enterprise tier only.</p>
+      <a href="#" class="card-btn">Unlock</a>
+    </div>
+  </div>
+
+  <!-- QUOTE FORM -->
+  <div class="form-panel" id="portal-quote">
+    <div class="form-intro reveal">
+      <div class="fi-tag">Request a Quote</div>
+      <h2>Get Your<br>Project<br>Spec'd</h2>
+      <p>Fill in your project parameters and a NexGrid solutions engineer will prepare a full tile configuration, energy yield model, and pricing proposal.</p>
+      <p>Typical turnaround: <strong style="color:var(--text)">1 business day.</strong></p>
+      <span class="sla-badge">Priority Partner SLA</span>
+    </div>
+    <div>
+      <div class="quote-form" id="quoteForm">
+        <div class="form-row">
+          <div class="form-field"><label>First Name</label><input type="text" placeholder="Jane"></div>
+          <div class="form-field"><label>Last Name</label><input type="text" placeholder="Smith"></div>
+        </div>
+        <div class="form-field"><label>Email Address</label><input type="email" placeholder="jane@company.com"></div>
+        <div class="form-field"><label>Organization</label><input type="text" placeholder="Firm / Municipality / Developer"></div>
+        <div class="form-field"><label>Project Location</label><input type="text" placeholder="Address or general area"></div>
+        <div class="form-row">
+          <div class="form-field"><label>Estimated Area (sq ft)</label><input type="text" placeholder="e.g. 8,000"></div>
+          <div class="form-field"><label>Target Install Date</label><input type="text" placeholder="e.g. Q2 2026"></div>
+        </div>
+        <div class="form-field">
+          <label>Tile Model(s) of Interest</label>
+          <div class="tile-selector">
+            <div class="tile-opt"          onclick="this.classList.toggle('selected')"><span class="to-name">NX-3</span><span class="to-size">30×30cm · Pedestrian</span></div>
+            <div class="tile-opt selected" onclick="this.classList.toggle('selected')"><span class="to-name">NX-7</span><span class="to-size">45×45cm · Urban</span></div>
+            <div class="tile-opt"          onclick="this.classList.toggle('selected')"><span class="to-name">NX-12</span><span class="to-size">60×60cm · Roadway</span></div>
+          </div>
+        </div>
+        <div class="form-field"><label>Project Notes</label><textarea placeholder="Describe the site, load requirements, grid connection goals, and any special considerations…"></textarea></div>
+        <button class="p-submit-btn" onclick="submitPortalForm()">Submit Request →</button>
+      </div>
+      <div class="success-state" id="successState">
+        <span class="success-icon">✅</span>
+        <h3>Request Received</h3>
+        <p>Your quote request is in the queue. A NexGrid solutions engineer will reach out within one business day.</p>
+        <p style="margin-top:1rem;font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.1em;color:var(--electric)">REF · NG-<span id="refCode"></span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="status-panel" id="portal-status">
+    <div class="status-header reveal">
+      <h2>Live Output · VB Oceanfront</h2>
+      <div class="live-dot">Live · Updated 2s ago</div>
+    </div>
+    <div class="metrics-grid reveal">
+      <div class="metric"><div class="metric-val cyan" id="liveKw">312.4</div><div class="metric-label">Current Output (kW)</div><div class="metric-delta">↑ 4.2% vs yesterday</div></div>
+      <div class="metric"><div class="metric-val gold">183,210</div><div class="metric-label">kWh Generated YTD</div><div class="metric-delta">↑ 11.8% vs target</div></div>
+      <div class="metric"><div class="metric-val green">99.1%</div><div class="metric-label">Tile Health</div><div class="metric-delta">3 tiles in maintenance</div></div>
+      <div class="metric"><div class="metric-val white">2,048</div><div class="metric-label">Active Tiles</div><div class="metric-delta">NX-7 · Oceanfront Array</div></div>
+    </div>
+    <div class="chart-row reveal">
+      <div class="chart-card">
+        <div class="chart-label">Monthly Solar Output (MWh)</div>
+        <div style="display:flex;gap:6px;align-items:flex-end;height:80px;" id="solarChart"></div>
+        <div style="display:flex;gap:6px;margin-top:.5rem;" id="solarLabels"></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-label">Monthly Kinetic Harvest (MWh)</div>
+        <div style="display:flex;gap:6px;align-items:flex-end;height:80px;" id="kineticChart"></div>
+        <div style="display:flex;gap:6px;margin-top:.5rem;" id="kineticLabels"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PORTAL FOOTER -->
+  <footer>
+    <div class="footer-logo">Nex<span>Grid</span><span class="portal-footer-note">PARTNER PORTAL</span></div>
+    <div class="footer-copy">CONFIDENTIAL · Not for public distribution · © 2026 NexGrid Inc.</div>
+    <a href="#" onclick="navigate('home');return false;" style="font-family:'Space Mono',monospace;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);text-decoration:none;cursor:none;transition:color .2s;" onmouseover="this.style.color='var(--electric)'" onmouseout="this.style.color='var(--text-dim)'">← Public Site</a>
+  </footer>
+
+</div><!-- /page-portal -->
+
+<script>
+/* ── CURSOR ─────────────────────────────────────────────── */
+const cursor = document.getElementById('cursor');
+const ring   = document.getElementById('cursorRing');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove', e => { mx=e.clientX; my=e.clientY; });
+(function tick(){ cursor.style.left=mx+'px'; cursor.style.top=my+'px'; rx+=(mx-rx)*.12; ry+=(my-ry)*.12; ring.style.left=rx+'px'; ring.style.top=ry+'px'; requestAnimationFrame(tick); })();
+
+/* ── ROUTER ─────────────────────────────────────────────── */
+let currentPage = 'home';
+let kwInterval  = null;
+
+function navigate(target) {
+  if (target === currentPage) return;
+  const cover = document.getElementById('pageCover');
+  cover.classList.add('active');
+  setTimeout(() => {
+    // hide current
+    document.getElementById('page-' + currentPage).classList.remove('active');
+    // show target
+    document.getElementById('page-' + target).classList.add('active');
+    // swap body class & nav style
+    if (target === 'portal') {
+      document.body.classList.add('portal');
+      document.getElementById('mainNav').className = 'portal-nav';
+    } else {
+      document.body.classList.remove('portal');
+      document.getElementById('mainNav').className = 'home-nav';
+    }
+    currentPage = target;
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    // re-run page init
+    if (target === 'portal') initPortal();
+    if (target === 'home')   initHome();
+    // reset reveals
+    refreshReveals();
+    // fade cover out
+    setTimeout(() => cover.classList.remove('active'), 50);
+  }, 350);
+}
+
+function navScrollTo(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ── SCROLL REVEAL ──────────────────────────────────────── */
+let revealObserver;
+function refreshReveals() {
+  if (revealObserver) revealObserver.disconnect();
+  // reset all
+  document.querySelectorAll('.reveal, .step').forEach(el => el.classList.remove('visible'));
+  revealObserver = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); revealObserver.unobserve(e.target); } });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('#page-' + currentPage + ' .reveal, #page-' + currentPage + ' .step').forEach(el => revealObserver.observe(el));
+}
+
+/* ── HOME INIT ──────────────────────────────────────────── */
+function initHome() {
+  // tile grid removed — nothing to init
+}
+
+/* ── PORTAL INIT ────────────────────────────────────────── */
+let chartsBuilt = false;
+function initPortal() {
+  // live kW flicker
+  clearInterval(kwInterval);
+  kwInterval = setInterval(() => {
+    const el = document.getElementById('liveKw');
+    if (el) el.textContent = (312.4 + (Math.random()-.5)*8).toFixed(1);
+  }, 2000);
+
+  // build charts once
+  if (chartsBuilt) return;
+  chartsBuilt = true;
+  const solarData   = [18,22,31,38,42,44,41,39,34,28,21,16];
+  const kineticData = [8,9,11,14,16,18,17,15,13,11,9,7];
+  const months      = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+
+  function buildChart(containerId, labelId, data, colorOn, colorOff, borderOn) {
+    const max = Math.max(...data);
+    const c = document.getElementById(containerId);
+    const l = document.getElementById(labelId);
+    data.forEach((v, i) => {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:80px;';
+      const bar = document.createElement('div');
+      bar.style.cssText = `width:100%;height:${(v/max)*100}%;background:${colorOff};border-top:1px solid ${borderOn};border-radius:1px 1px 0 0;transition:background .2s;`;
+      bar.onmouseover = () => bar.style.background = colorOn;
+      bar.onmouseout  = () => bar.style.background = colorOff;
+      wrap.appendChild(bar); c.appendChild(wrap);
+      const lbl = document.createElement('div');
+      lbl.style.cssText = 'flex:1;text-align:center;font-family:Space Mono,monospace;font-size:.48rem;color:var(--text-dim);';
+      lbl.textContent = months[i]; l.appendChild(lbl);
+    });
+  }
+
+  buildChart('solarChart',   'solarLabels',   solarData,   'rgba(0,229,255,.35)',  'rgba(0,229,255,.18)',  'rgba(0,229,255,.5)');
+  buildChart('kineticChart', 'kineticLabels', kineticData, 'rgba(245,166,35,.35)', 'rgba(245,166,35,.18)', 'rgba(245,166,35,.5)');
+}
+
+function submitPortalForm() {
+  document.getElementById('quoteForm').style.display = 'none';
+  const s = document.getElementById('successState');
+  s.classList.add('show');
+  document.getElementById('refCode').textContent = Math.random().toString(36).substr(2,8).toUpperCase();
+}
+
+function sendRequest(btn) {
+  btn.textContent = '✓ REQUEST SENT';
+  btn.classList.add('sent');
+}
+
+// ── SEARCH ────────────────────────────────────────────────
+const SEARCH_INDEX = [
+  { section: 'Hero', title: 'Power Under Every Step — Solar Kinetic Paving', target: 'home', scroll: null },
+  { section: 'Technology', title: 'Photovoltaic Surface Layer — 23.4% efficiency solar glass', target: 'home', scroll: 'how' },
+  { section: 'Technology', title: 'Piezoelectric Kinetic Core — footstep energy harvest', target: 'home', scroll: 'how' },
+  { section: 'Technology', title: 'Smart Micro-Inverter — MPPT dual-channel conditioning', target: 'home', scroll: 'how' },
+  { section: 'Technology', title: 'Grid-Ready Distribution — NexGrid mesh micro-grid', target: 'home', scroll: 'how' },
+  { section: 'Technology', title: 'Heat Reflective Coating — reduces surface temp by up to 43°F', target: 'home', scroll: 'how' },
+  { section: 'Products', title: 'NX-3 Pedestrian Tile — 30×30cm, 18W peak, 600kg load', target: 'home', scroll: 'products' },
+  { section: 'Products', title: 'NX-7 Urban Tile — 45×45cm, 32W peak, 2000kg load, LED + NFC', target: 'home', scroll: 'products' },
+  { section: 'Products', title: 'NX-12 Roadway Tile — 60×60cm, 47W peak, 12000kg load', target: 'home', scroll: 'products' },
+  { section: 'Virginia Beach', title: 'Built in Virginia Beach — Corporate Landing Pkwy', target: 'home', scroll: 'vb' },
+  { section: 'Virginia Beach', title: 'VB Green Business · DOE Partner · LEED Compatible', target: 'home', scroll: 'vb' },
+  { section: 'Virginia Beach', title: '80,000 tiles produced annually', target: 'home', scroll: 'vb' },
+  { section: 'Contact', title: 'Start Your Project — Request a Quote', target: 'home', scroll: 'contact' },
+  { section: 'Contact', title: 'Headquarters — 2214 Corporate Landing Pkwy, Virginia Beach VA', target: 'home', scroll: 'contact' },
+  { section: 'Sponsors', title: 'Flint Water Podcast', target: 'home', scroll: 'vb' },
+  { section: 'Sponsors', title: 'The Flint Water Project', target: 'home', scroll: 'vb' },
+  { section: 'Sponsors', title: 'Grande Crater', target: 'home', scroll: 'vb' },
+  { section: 'Sponsors', title: 'ANN', target: 'home', scroll: 'vb' },
+  { section: 'Sponsors', title: 'Deep Dive', target: 'home', scroll: 'vb' },
+  { section: 'Sponsors', title: 'Qwerty INC', target: 'home', scroll: 'vb' },
+  { section: 'Partner Portal', title: 'Design & Spec Toolkit — CAD files, schematics, NX-3/7/12', target: 'portal', scroll: 'portal-quote' },
+  { section: 'Partner Portal', title: 'Installation Dashboard — live energy output & tile health', target: 'portal', scroll: 'portal-status' },
+  { section: 'Partner Portal', title: 'NX-15 Beta Program — 72W dual-perovskite tile', target: 'portal', scroll: null },
+  { section: 'Partner Portal', title: 'Live Output — 2,048 active tiles, VB Oceanfront Array', target: 'portal', scroll: 'portal-status' },
+  { section: 'Partner Portal', title: 'Submit Quote Request — Priority Partner SLA', target: 'portal', scroll: 'portal-quote' },
+];
+
+function openSearch() {
+  closeDropdown();
+  document.getElementById('searchOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('searchInput').focus(), 200);
+}
+
+function closeSearch() {
+  document.getElementById('searchOverlay').classList.remove('open');
+  document.getElementById('searchInput').value = '';
+  document.getElementById('searchResults').innerHTML = '';
+  document.getElementById('searchEmpty').style.display = 'none';
+}
+
+function highlight(text, query) {
+  if (!query) return text;
+  const re = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return text.replace(re, '<em>$1</em>');
+}
+
+function doSearch(q) {
+  const resultsEl = document.getElementById('searchResults');
+  const emptyEl   = document.getElementById('searchEmpty');
+  resultsEl.innerHTML = '';
+  if (!q.trim()) { emptyEl.style.display = 'none'; return; }
+  const matches = SEARCH_INDEX.filter(item =>
+    item.title.toLowerCase().includes(q.toLowerCase()) ||
+    item.section.toLowerCase().includes(q.toLowerCase())
+  ).slice(0, 8);
+  if (matches.length === 0) { emptyEl.style.display = 'block'; return; }
+  emptyEl.style.display = 'none';
+  matches.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'search-result';
+    div.innerHTML = `<div class="sr-section">${item.section}</div><div class="sr-title">${highlight(item.title, q)}</div>`;
+    div.onclick = () => {
+      closeSearch();
+      if (item.target !== currentPage) {
+        navigate(item.target);
+        if (item.scroll) setTimeout(() => navScrollTo(item.scroll), 500);
+      } else {
+        if (item.scroll) navScrollTo(item.scroll);
+      }
+    };
+    resultsEl.appendChild(div);
+  });
+}
+
+// ── COMMUNITY VOTE ────────────────────────────────────────
+(async function initVote() {
+  const VOTE_KEY    = 'nexgrid-votes-v1';   // shared: { solar, kinetic }
+  const HISTORY_KEY = 'nexgrid-history-v1'; // personal: array of session IDs voted
+
+  // Unique session ID — new every page load
+  const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+  // This session's vote (in-memory only, resets each visit)
+  let sessionVote = null;
+
+  // ── storage helpers ──
+  async function loadVotes() {
+    try {
+      const r = await window.storage.get(VOTE_KEY, true);
+      return r ? JSON.parse(r.value) : { solar: 0, kinetic: 0 };
+    } catch { return { solar: 0, kinetic: 0 }; }
+  }
+
+  async function saveVotes(v) {
+    try { await window.storage.set(VOTE_KEY, JSON.stringify(v), true); } catch {}
+  }
+
+  // ── animate number counter ──
+  function animateCount(el, from, to, duration) {
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min((now - start) / duration, 1);
+      el.textContent = Math.round(from + (to - from) * t);
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  let lastTotal = 0;
+
+  // ── render ──
+  function renderVotes(votes) {
+    const total = votes.solar + votes.kinetic;
+    const sp = total ? Math.round(votes.solar   / total * 100) : 50;
+    const kp = total ? Math.round(votes.kinetic / total * 100) : 50;
+
+    // Percentages — show 50/50 until there are votes
+    document.getElementById('solarPct').textContent   = sp + '%';
+    document.getElementById('kineticPct').textContent = kp + '%';
+    document.getElementById('solarBar').style.width   = sp + '%';
+    document.getElementById('kineticBar').style.width = kp + '%';
+
+    // Per-side counts
+    document.getElementById('solarCount').textContent   = total ? votes.solar   + ' vote' + (votes.solar   !== 1 ? 's' : '') : '';
+    document.getElementById('kineticCount').textContent = total ? votes.kinetic + ' vote' + (votes.kinetic !== 1 ? 's' : '') : '';
+
+    // Big total counter — animate when it changes
+    const bigEl = document.getElementById('voteTotalBig');
+    animateCount(bigEl, lastTotal, total, 600);
+    lastTotal = total;
+
+    // Sub line
+    document.getElementById('voteTotalLine').textContent =
+      total === 0 ? 'Be the first to vote'
+      : total === 1 ? '1 person has voted'
+      : total + ' people have voted';
+
+    // Voted state for this session
+    const sCard = document.getElementById('voteSolar');
+    const kCard = document.getElementById('voteKinetic');
+    sCard.classList.toggle('voted-solar',   sessionVote === 'solar');
+    kCard.classList.toggle('voted-kinetic', sessionVote === 'kinetic');
+
+    const vv = document.getElementById('voteVoted');
+    const vl = document.getElementById('voteVotedLabel');
+    if (sessionVote) {
+      vv.style.display = 'flex';
+      vl.textContent = '✓ You voted ' + (sessionVote === 'solar' ? 'Solar' : 'Kinetic') + ' this visit';
+    } else {
+      vv.style.display = 'none';
+    }
+  }
+
+  // ── initial load ──
+  let votes = await loadVotes();
+  renderVotes(votes);
+
+  // ── poll every 6s ──
+  setInterval(async () => {
+    votes = await loadVotes();
+    renderVotes(votes);
+  }, 6000);
+
+  // ── cast vote (once per session) ──
+  window.castVote = async function(choice) {
+    if (sessionVote === choice) return; // already voted this in this session
+    votes = await loadVotes();
+
+    // Remove previous session vote if switching
+    if (sessionVote) {
+      votes[sessionVote] = Math.max(0, votes[sessionVote] - 1);
+    }
+
+    votes[choice]++;
+    sessionVote = choice;
+
+    await saveVotes(votes);
+    renderVotes(votes);
+  };
+
+  // ── change vote (within same session) ──
+  window.changeVote = async function() {
+    if (!sessionVote) return;
+    votes = await loadVotes();
+    votes[sessionVote] = Math.max(0, votes[sessionVote] - 1);
+    sessionVote = null;
+    await saveVotes(votes);
+    renderVotes(votes);
+  };
+})();
+
+
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSearch(); });
+
+// ── HAMBURGER DROPDOWN ────────────────────────────────────
+function toggleDropdown() {
+  const btn = document.getElementById('hamburgerBtn');
+  const dd  = document.getElementById('navDropdown');
+  btn.classList.toggle('open');
+  dd.classList.toggle('open');
+}
+
+function closeDropdown() {
+  document.getElementById('hamburgerBtn').classList.remove('open');
+  document.getElementById('navDropdown').classList.remove('open');
+}
+
+function dropNav(target) {
+  closeDropdown();
+  // small delay so dropdown closes before scrolling / navigating
+  setTimeout(() => {
+    if (target === 'portal') {
+      navigate('portal');
+    } else if (target === 'quote-cta') {
+      navigate('portal');
+    } else {
+      // if on portal, go home first then scroll
+      if (currentPage !== 'home') {
+        navigate('home');
+        setTimeout(() => navScrollTo(target), 500);
+      } else {
+        navScrollTo(target);
+      }
+    }
+  }, 300);
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  const dd  = document.getElementById('navDropdown');
+  const btn = document.getElementById('hamburgerBtn');
+  if (dd.classList.contains('open') && !dd.contains(e.target) && !btn.contains(e.target)) {
+    closeDropdown();
+  }
+});
+
+// ── HERO TILE GRID GLOW ──────────────────────────────────
+(function() {
+  const canvas = document.getElementById('heroCanvas');
+  const ctx    = canvas.getContext('2d');
+  const hero   = canvas.parentElement;
+
+  const TILE_SIZE = 80;
+  const RADIUS    = 2.2; // tiles lit around cursor
+  const COLORS = [
+    [255, 140,  10],
+    [255,  80,   0],
+    [255, 200,   0],
+    [255,  40,  80],
+    [200,   0, 255],
+    [  0, 120, 255],
+    [255,  50, 150],
+    [255, 100,   0],
+  ];
+
+  let cols, rows, tiles = [];
+
+  function buildGrid() {
+    canvas.width  = hero.offsetWidth  || window.innerWidth;
+    canvas.height = hero.offsetHeight || window.innerHeight;
+    cols  = Math.ceil(canvas.width  / TILE_SIZE) + 1;
+    rows  = Math.ceil(canvas.height / TILE_SIZE) + 1;
+    tiles = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        tiles.push({
+          x:      c * TILE_SIZE,
+          y:      r * TILE_SIZE,
+          alpha:  0,
+          target: 0,
+          color:  COLORS[Math.floor(Math.random() * COLORS.length)],
+        });
+      }
+    }
+  }
+
+  buildGrid();
+  window.addEventListener('resize', buildGrid);
+
+  let mouseX = -9999, mouseY = -9999, active = false;
+
+  hero.addEventListener('mousemove', e => {
+    const r = hero.getBoundingClientRect();
+    mouseX = e.clientX - r.left;
+    mouseY = e.clientY - r.top;
+    active = true;
+  });
+  hero.addEventListener('mouseleave', () => { active = false; });
+
+  function draw() {
+    requestAnimationFrame(draw);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const curCol = mouseX / TILE_SIZE;
+    const curRow = mouseY / TILE_SIZE;
+
+    tiles.forEach(t => {
+      const tc = (t.x + TILE_SIZE / 2) / TILE_SIZE;
+      const tr = (t.y + TILE_SIZE / 2) / TILE_SIZE;
+      const dist = Math.sqrt((tc - curCol) ** 2 + (tr - curRow) ** 2);
+
+      t.target = active ? Math.max(0, 1 - dist / RADIUS) : 0;
+      t.alpha  += (t.target - t.alpha) * 0.12;
+
+      if (t.alpha < 0.004) return;
+
+      const [r, g, b] = t.color;
+      const a = t.alpha * 0.85;
+
+      // Tile fill
+      ctx.fillStyle = `rgba(${r},${g},${b},${(a * 0.18).toFixed(3)})`;
+      ctx.fillRect(t.x + 1, t.y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+
+      // Tile border glow
+      ctx.strokeStyle = `rgba(${r},${g},${b},${(a * 0.7).toFixed(3)})`;
+      ctx.lineWidth   = 1;
+      ctx.strokeRect(t.x + 1, t.y + 1, TILE_SIZE - 2, TILE_SIZE - 2);
+    });
+  }
+
+  draw();
+})();
+
+initHome();
+refreshReveals();
+
+</script>
+</body>
+</html>
